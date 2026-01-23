@@ -30,7 +30,7 @@ class NationalGridConfig:
         endpoint_env: str = "NATIONALGRID_GRAPHQL_ENDPOINT",
         username_env: str = "NATIONALGRID_USERNAME",
         password_env: str = "NATIONALGRID_PASSWORD",
-    ) -> "NationalGridConfig":
+    ) -> NationalGridConfig:
         """Load configuration values from environment variables."""
 
         endpoint = os.environ.get(endpoint_env, DEFAULT_ENDPOINT)
@@ -65,7 +65,7 @@ class NationalGridConfig:
             headers.update(extra_headers)
         return headers
 
-    def with_overrides(self, **overrides: object) -> "NationalGridConfig":
+    def with_overrides(self, **overrides: object) -> NationalGridConfig:
         """Return a cloned config with updated fields."""
 
         data = asdict(self)

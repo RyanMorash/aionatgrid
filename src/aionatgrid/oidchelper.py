@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 import aiohttp
 
-from .exceptions import CannotConnect, InvalidAuth
+from .exceptions import CannotConnectError, InvalidAuthError
 from .helpers import create_cookie_jar
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ async def async_auth_oidc(
         )
         if auth_code is None:
             _LOGGER.error("Failed to obtain authorization code")
-            raise CannotConnect("Failed to obtain authorization code")
+            raise CannotConnectError("Failed to obtain authorization code")
         _LOGGER.debug("Obtained authorization code")
 
         tokens = await _get_access(
@@ -73,11 +73,11 @@ async def async_auth_oidc(
             _LOGGER.debug("Successfully obtained access token")
             return tokens["access_token"]
         _LOGGER.error("Failed to obtain access token")
-        raise CannotConnect("Failed to obtain access token")
+        raise CannotConnectError("Failed to obtain access token")
 
     except aiohttp.ClientError as err:
         _LOGGER.exception("Connection error during login")
-        raise CannotConnect(f"Connection error: {err}") from err
+        raise CannotConnectError(f"Connection error: {err}") from err
     finally:
         await secure_session.close()
 
@@ -114,7 +114,7 @@ async def _get_config(session: aiohttp.ClientSession, base_url: str, tenant_id: 
     config_text, _, status = await _fetch(session, config_url)
     if status != 200 or not config_text:
         _LOGGER.error("Failed to get configuration. Status: %s", status)
-        raise CannotConnect("Failed to get configuration")
+        raise CannotConnectError("Failed to get configuration")
     config: ConfigDict = json.loads(config_text)
     return config
 
@@ -145,7 +145,7 @@ async def _get_auth(
     auth_content, final_url, status = await _fetch(session, config["authorization_endpoint"], params=auth_params)
     if status != 200 or not auth_content:
         _LOGGER.error("Failed to get authorization. Status: %s", status)
-        raise CannotConnect("Failed to get authorization")
+        raise CannotConnectError("Failed to get authorization")
 
     settings = _extract_settings(auth_content)
     if not settings:
@@ -192,7 +192,7 @@ async def _get_access(
     token_content, _, status = await _fetch(session, config["token_endpoint"], method="POST", data=token_data)
     if status != 200 or not token_content:
         _LOGGER.error("Failed to get access token. Status: %s", status)
-        raise CannotConnect("Failed to get access token")
+        raise CannotConnectError("Failed to get access token")
     tokens: TokenDict = json.loads(token_content)
     return tokens
 
@@ -209,7 +209,7 @@ async def _fetch(session: aiohttp.ClientSession, url: str, **kwargs: Any) -> tup
             return content, str(response.url), response.status
     except aiohttp.ClientError:
         _LOGGER.exception("Network error occurred")
-        return None, None, 0
+        raise CannotConnectError("Network error occurred")
 
 
 def _extract_settings(auth_content: str) -> dict[str, Any] | None:
@@ -261,7 +261,7 @@ async def _post_credentials(
     )
     if status != 200:
         _LOGGER.error("Failed to post credentials. Status: %s", status)
-        raise InvalidAuth("Invalid username or password")
+        raise InvalidAuthError("Invalid username or password")
     _LOGGER.debug("Credentials posted successfully")
 
 
@@ -289,8 +289,8 @@ async def _confirm_signin(
     if status != 200:
         _LOGGER.error("Failed to confirm signin. Status: %s", status)
         if status == 403:
-            raise InvalidAuth("Invalid username or password")
-        raise CannotConnect("Failed to confirm signin")
+            raise InvalidAuthError("Invalid username or password")
+        raise CannotConnectError("Failed to confirm signin")
     if final_url:
         query = urlparse(final_url).query
         parsed_query = parse_qs(query)
@@ -303,7 +303,7 @@ async def _confirm_signin(
                 parsed_query.get("error"),
                 parsed_query.get("error_description"),
             )
-            raise InvalidAuth("Sign-in failed")
+            raise InvalidAuthError("Sign-in failed")
         else:
             _LOGGER.warning("Sign-in confirmed, but no authorization code found")
         return auth_code

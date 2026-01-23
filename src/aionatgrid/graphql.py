@@ -34,7 +34,7 @@ class GraphQLResponse:
     extensions: Mapping[str, Any] | None = None
 
     @classmethod
-    def from_payload(cls, payload: Mapping[str, Any]) -> "GraphQLResponse":
+    def from_payload(cls, payload: Mapping[str, Any]) -> GraphQLResponse:
         return cls(
             data=payload.get("data"),
             errors=payload.get("errors"),

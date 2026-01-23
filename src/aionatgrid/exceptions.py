@@ -1,21 +1,19 @@
 """Exceptions."""
 
-from typing import TYPE_CHECKING
 
-
-class CannotConnect(Exception):
+class CannotConnectError(Exception):
     """Error to indicate we cannot connect."""
 
 
-class InvalidAuth(Exception):
+class InvalidAuthError(Exception):
     """Error to indicate there is invalid auth."""
 
 
-class MfaChallenge(Exception):
+class MfaChallengeError(Exception):
     """Raised when MFA is required and user interaction is needed."""
 
 
-class ApiException(Exception):
+class ApiError(Exception):
     """Raised during problems talking to the API."""
 
     def __init__(
