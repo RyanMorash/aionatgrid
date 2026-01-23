@@ -10,7 +10,7 @@ from .oidchelper import async_auth_oidc
 _LOGGER = logging.getLogger(__name__)
 
 
-class NationalGrid:
+class NationalGridAuth:
     """Base class for National Grid subsidiaries."""
 
     @staticmethod
@@ -41,13 +41,13 @@ class NationalGrid:
         return await async_auth_oidc(
             username,
             password,
-            NationalGrid.BASE_URL,
-            NationalGrid.TENANT_ID,
-            NationalGrid.POLICY,
-            NationalGrid.CLIENT_ID,
-            NationalGrid.REDIRECT_URI,
-            NationalGrid.SCOPE_AUTH,
-            NationalGrid.SCOPE_ACCESS,
-            NationalGrid.SELF_ASSERTED_ENDPOINT,
-            NationalGrid.POLICY_CONFIRM_ENDPOINT,
+            NationalGridAuth.BASE_URL,
+            NationalGridAuth.TENANT_ID,
+            NationalGridAuth.POLICY,
+            NationalGridAuth.CLIENT_ID,
+            NationalGridAuth.REDIRECT_URI,
+            NationalGridAuth.SCOPE_AUTH,
+            NationalGridAuth.SCOPE_ACCESS,
+            NationalGridAuth.SELF_ASSERTED_ENDPOINT,
+            NationalGridAuth.POLICY_CONFIRM_ENDPOINT,
         )

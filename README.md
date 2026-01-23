@@ -4,7 +4,7 @@ Asynchronous Python client for communicating with National Grid's GraphQL API us
 
 ## Features
 - Async `NationalGridClient` with context-manager support and connection reuse
-- Configurable endpoint, API key, and request headers via `NationalGridConfig`
+- Configurable endpoint, OIDC credentials, and request headers via `NationalGridConfig`
 - Typed `GraphQLRequest` / `GraphQLResponse` helpers for reuse across queries
 - Minimal dependency set (only `aiohttp`) with optional tooling for linting and typing
 - Example script plus pytest suite for smoke testing your integration
@@ -20,11 +20,13 @@ uv sync
 The command creates a `.venv` managed by `uv` and installs runtime plus development dependencies declared in `pyproject.toml`.
 
 ## Usage
-1. Export the endpoint and API key (optional) used by National Grid's GraphQL service:
+1. Export the endpoint, OIDC credentials, and subscription key used by National Grid's GraphQL service:
    ```bash
    export NATIONALGRID_GRAPHQL_ENDPOINT="https://api.nationalgrid.example/graphql"
-   export NATIONALGRID_API_KEY="replace-with-real-key"
-   ```
+    export NATIONALGRID_USERNAME="user@example.com"
+    export NATIONALGRID_PASSWORD="replace-with-real-password"
+    export NATIONALGRID_SUBSCRIPTION_KEY="replace-with-subscription-key"
+    ```
 2. Run the example script, which issues a sample query:
    ```bash
    uv run python examples/basic_usage.py

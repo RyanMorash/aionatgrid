@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from typing import Mapping
 import os
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
 
-DEFAULT_ENDPOINT = "https://api.nationalgrid.example/graphql"
+DEFAULT_ENDPOINT = "https://myaccount.nationalgrid.com/api/user-cu-uwp-gql"
 DEFAULT_TIMEOUT = 30.0
 
 
@@ -15,7 +15,9 @@ class NationalGridConfig:
     """Holds reusable client configuration."""
 
     endpoint: str = DEFAULT_ENDPOINT
-    api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
+    subscription_key: str = "e674f89d7ed9417194de894b701333dd"
     default_headers: Mapping[str, str] = field(default_factory=dict)
     timeout: float = DEFAULT_TIMEOUT
     verify_ssl: bool = True
@@ -25,23 +27,37 @@ class NationalGridConfig:
         cls,
         *,
         endpoint_env: str = "NATIONALGRID_GRAPHQL_ENDPOINT",
-        api_key_env: str = "NATIONALGRID_API_KEY",
+        username_env: str = "NATIONALGRID_USERNAME",
+        password_env: str = "NATIONALGRID_PASSWORD",
+        subscription_key_env: str = "NATIONALGRID_SUBSCRIPTION_KEY",
     ) -> "NationalGridConfig":
         """Load configuration values from environment variables."""
 
         endpoint = os.environ.get(endpoint_env, DEFAULT_ENDPOINT)
-        api_key = os.environ.get(api_key_env)
-        return cls(endpoint=endpoint, api_key=api_key)
+        username = os.environ.get(username_env)
+        password = os.environ.get(password_env)
+        return cls(
+            endpoint=endpoint,
+            username=username,
+            password=password,
+        )
 
-    def build_headers(self, extra_headers: Mapping[str, str] | None = None) -> dict[str, str]:
+    def build_headers(
+        self,
+        extra_headers: Mapping[str, str] | None = None,
+        *,
+        access_token: str | None = None,
+    ) -> dict[str, str]:
         """Combine default headers, authentication, and ad-hoc overrides."""
 
         headers: dict[str, str] = {
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+        if self.subscription_key:
+            headers["ocp-apim-subscription-key"] = self.subscription_key
         headers.update(self.default_headers)
         if extra_headers:
             headers.update(extra_headers)

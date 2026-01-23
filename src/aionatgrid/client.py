@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import aiohttp
 
+from .auth import NationalGridAuth
 from .config import NationalGridConfig
 from .graphql import GraphQLRequest, GraphQLResponse
 
@@ -25,6 +28,8 @@ class NationalGridClient:
         self._config = config or NationalGridConfig()
         self._session = session
         self._owns_session = session is None
+        self._access_token: str | None = None
+        self._auth_lock = asyncio.Lock()
 
     @property
     def config(self) -> NationalGridConfig:
@@ -50,8 +55,9 @@ class NationalGridClient:
         timeout: float | None = None,
     ) -> GraphQLResponse:
         session = await self._ensure_session()
+        access_token = await self._get_access_token(session)
         payload = request.to_payload()
-        merged_headers = self._config.build_headers(headers)
+        merged_headers = self._config.build_headers(headers, access_token=access_token)
         effective_timeout = aiohttp.ClientTimeout(total=timeout or self._config.timeout)
 
         logger.debug("POST %s", self._config.endpoint)
@@ -69,6 +75,23 @@ class NationalGridClient:
         if graphql_response.errors:
             logger.warning("GraphQL errors returned: %s", graphql_response.errors)
         return graphql_response
+
+    async def _get_access_token(self, session: aiohttp.ClientSession) -> str | None:
+        if self._access_token:
+            return self._access_token
+        if not (self._config.username and self._config.password):
+            return None
+        async with self._auth_lock:
+            if self._access_token:
+                return self._access_token
+            auth_client = NationalGridAuth()
+            self._access_token = await auth_client.async_login(
+                session,
+                self._config.username,
+                self._config.password,
+                {},
+            )
+        return self._access_token
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         if self._session and not self._session.closed:

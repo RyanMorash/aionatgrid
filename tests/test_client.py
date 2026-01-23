@@ -46,10 +46,22 @@ async def test_execute_returns_response_payload() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_merges_headers() -> None:
-    config = NationalGridConfig(endpoint="https://example.test/graphql", api_key="token")
+    config = NationalGridConfig(
+        endpoint="https://example.test/graphql",
+        username="user@example.com",
+        password="super-secret",
+        subscription_key="sub-key",
+    )
     session = MagicMock(spec=aiohttp.ClientSession)
     session.closed = False
     session.post.return_value = _DummyResponse({"data": {}})
+
+    async def _fake_login(self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict) -> str:
+        assert username == "user@example.com"
+        assert password == "super-secret"
+        return "token"
+
+    monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
 
     client = NationalGridClient(config=config, session=session)
 
@@ -61,5 +73,33 @@ async def test_execute_merges_headers() -> None:
     _, kwargs = session.post.call_args
     headers = kwargs["headers"]
     assert headers["Authorization"] == "Bearer token"
+    assert headers["ocp-apim-subscription-key"] == "sub-key"
     assert headers["X-Test"] == "1"
     assert headers["Content-Type"] == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_execute_uses_oidc_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = NationalGridConfig(
+        endpoint="https://example.test/graphql",
+        username="user@example.com",
+        password="super-secret",
+    )
+    session = MagicMock(spec=aiohttp.ClientSession)
+    session.closed = False
+    session.post.return_value = _DummyResponse({"data": {}})
+
+    async def _fake_login(self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict) -> str:
+        assert username == "user@example.com"
+        assert password == "super-secret"
+        return "oidc-token"
+
+    monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
+
+    client = NationalGridClient(config=config, session=session)
+
+    await client.execute(GraphQLRequest(query="query Test { value }"))
+
+    _, kwargs = session.post.call_args
+    headers = kwargs["headers"]
+    assert headers["Authorization"] == "Bearer oidc-token"
