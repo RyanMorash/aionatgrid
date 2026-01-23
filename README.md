@@ -4,7 +4,8 @@ Asynchronous Python client for communicating with National Grid's GraphQL API us
 
 ## Features
 - Async `NationalGridClient` with context-manager support and connection reuse
-- Configurable endpoint, OIDC credentials, and request headers via `NationalGridConfig`
+- GraphQL and REST request helpers with shared authentication + headers
+- Configurable endpoints, OIDC credentials, and request headers via `NationalGridConfig`
 - Typed `GraphQLRequest` / `GraphQLResponse` helpers for reuse across queries
 - Minimal dependency set (only `aiohttp`) with optional tooling for linting and typing
 - Example script plus pytest suite for smoke testing your integration
@@ -20,12 +21,11 @@ uv sync
 The command creates a `.venv` managed by `uv` and installs runtime plus development dependencies declared in `pyproject.toml`.
 
 ## Usage
-1. Export the endpoint, OIDC credentials, and subscription key used by National Grid's GraphQL service:
+1. Export the endpoints, OIDC credentials, and subscription key used by National Grid's services:
    ```bash
    export NATIONALGRID_GRAPHQL_ENDPOINT="https://api.nationalgrid.example/graphql"
     export NATIONALGRID_USERNAME="user@example.com"
     export NATIONALGRID_PASSWORD="replace-with-real-password"
-    export NATIONALGRID_SUBSCRIPTION_KEY="replace-with-subscription-key"
     ```
 2. Run the example script, which issues a sample query:
    ```bash
@@ -52,6 +52,21 @@ async def main() -> None:
     async with NationalGridClient(config=config) as client:
         response = await client.execute(request)
         print(response.data)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+REST endpoints can be called with the shared client:
+```python
+import asyncio
+from aionatgrid import NationalGridClient, NationalGridConfig
+
+async def main() -> None:
+    config = NationalGridConfig.from_env()
+    async with NationalGridClient(config=config) as client:
+        response = await client.request_rest("GET", "/v1/usage")
+        print(response.status, response.data)
 
 if __name__ == "__main__":
     asyncio.run(main())

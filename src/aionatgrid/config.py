@@ -15,6 +15,7 @@ class NationalGridConfig:
     """Holds reusable client configuration."""
 
     endpoint: str = DEFAULT_ENDPOINT
+    rest_base_url: str = "https://myaccount.nationalgrid.com/api"
     username: str | None = None
     password: str | None = None
     subscription_key: str = "e674f89d7ed9417194de894b701333dd"
@@ -29,7 +30,6 @@ class NationalGridConfig:
         endpoint_env: str = "NATIONALGRID_GRAPHQL_ENDPOINT",
         username_env: str = "NATIONALGRID_USERNAME",
         password_env: str = "NATIONALGRID_PASSWORD",
-        subscription_key_env: str = "NATIONALGRID_SUBSCRIPTION_KEY",
     ) -> "NationalGridConfig":
         """Load configuration values from environment variables."""
 
@@ -39,7 +39,7 @@ class NationalGridConfig:
         return cls(
             endpoint=endpoint,
             username=username,
-            password=password,
+            password=password
         )
 
     def build_headers(
@@ -47,13 +47,15 @@ class NationalGridConfig:
         extra_headers: Mapping[str, str] | None = None,
         *,
         access_token: str | None = None,
+        content_type: str | None = "application/json",
     ) -> dict[str, str]:
         """Combine default headers, authentication, and ad-hoc overrides."""
 
         headers: dict[str, str] = {
-            "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        if content_type:
+            headers["Content-Type"] = content_type
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
         if self.subscription_key:

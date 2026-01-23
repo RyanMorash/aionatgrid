@@ -27,6 +27,28 @@ class _DummyResponse:
         return None
 
 
+class _DummyRestResponse:
+    def __init__(self, payload: object, *, content_type: str = "application/json"):
+        self._payload = payload
+        self.headers = {"Content-Type": content_type}
+        self.status = 200
+
+    async def __aenter__(self) -> "_DummyRestResponse":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:  # type: ignore[override]
+        return False
+
+    async def json(self, content_type: str | None = None) -> object:
+        return self._payload
+
+    async def text(self) -> str:
+        return "ok"
+
+    def raise_for_status(self) -> None:
+        return None
+
+
 @pytest.mark.asyncio
 async def test_execute_returns_response_payload() -> None:
     config = NationalGridConfig(endpoint="https://example.test/graphql")
@@ -45,7 +67,7 @@ async def test_execute_returns_response_payload() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_merges_headers() -> None:
+async def test_execute_merges_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     config = NationalGridConfig(
         endpoint="https://example.test/graphql",
         username="user@example.com",
@@ -76,6 +98,37 @@ async def test_execute_merges_headers() -> None:
     assert headers["ocp-apim-subscription-key"] == "sub-key"
     assert headers["X-Test"] == "1"
     assert headers["Content-Type"] == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_request_rest_uses_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = NationalGridConfig(
+        endpoint="https://example.test/graphql",
+        rest_base_url="https://example.test/api/",
+        username="user@example.com",
+        password="super-secret",
+        subscription_key="sub-key",
+    )
+    session = MagicMock(spec=aiohttp.ClientSession)
+    session.closed = False
+    session.request.return_value = _DummyRestResponse({"value": 42})
+
+    async def _fake_login(self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict) -> str:
+        return "rest-token"
+
+    monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
+
+    client = NationalGridClient(config=config, session=session)
+
+    response = await client.request_rest("GET", "v1/usage", params={"a": "b"})
+
+    assert response.data == {"value": 42}
+    session.request.assert_called_once()
+    _, kwargs = session.request.call_args
+    assert kwargs["url"] == "https://example.test/api/v1/usage"
+    headers = kwargs["headers"]
+    assert headers["Authorization"] == "Bearer rest-token"
+    assert headers["ocp-apim-subscription-key"] == "sub-key"
 
 
 @pytest.mark.asyncio

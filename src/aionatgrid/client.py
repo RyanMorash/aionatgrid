@@ -1,4 +1,4 @@
-"""Async GraphQL client for National Grid."""
+"""Async client for National Grid GraphQL and REST endpoints."""
 
 from __future__ import annotations
 
@@ -6,18 +6,20 @@ import asyncio
 import logging
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urljoin
 
 import aiohttp
 
 from .auth import NationalGridAuth
 from .config import NationalGridConfig
 from .graphql import GraphQLRequest, GraphQLResponse
+from .rest import RestResponse
 
 logger = logging.getLogger(__name__)
 
 
 class NationalGridClient:
-    """High-level GraphQL client that reuses an aiohttp session."""
+    """High-level client that reuses an aiohttp session."""
 
     def __init__(
         self,
@@ -39,7 +41,12 @@ class NationalGridClient:
         await self._ensure_session()
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:  # type: ignore[override]
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any | None,
+    ) -> None:
         await self.close()
 
     async def close(self) -> None:
@@ -76,6 +83,49 @@ class NationalGridClient:
             logger.warning("GraphQL errors returned: %s", graphql_response.errors)
         return graphql_response
 
+    async def request_rest(
+        self,
+        method: str,
+        path_or_url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        json: Any | None = None,
+        data: Any | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> RestResponse:
+        """Issue a REST request against the configured base URL."""
+
+        session = await self._ensure_session()
+        access_token = await self._get_access_token(session)
+        url = self._resolve_rest_url(path_or_url)
+        content_type = "application/json" if json is not None else None
+        merged_headers = self._config.build_headers(
+            headers,
+            access_token=access_token,
+            content_type=content_type,
+        )
+        effective_timeout = aiohttp.ClientTimeout(total=timeout or self._config.timeout)
+
+        logger.debug("%s %s", method.upper(), url)
+        async with session.request(
+            method=method,
+            url=url,
+            params=params,
+            json=json,
+            data=data,
+            headers=merged_headers,
+            timeout=effective_timeout,
+            ssl=self._config.verify_ssl,
+        ) as response:
+            response.raise_for_status()
+            payload = await self._read_rest_payload(response)
+            return RestResponse(
+                status=response.status,
+                headers=dict(response.headers),
+                data=payload,
+            )
+
     async def _get_access_token(self, session: aiohttp.ClientSession) -> str | None:
         if self._access_token:
             return self._access_token
@@ -92,6 +142,19 @@ class NationalGridClient:
                 {},
             )
         return self._access_token
+
+    def _resolve_rest_url(self, path_or_url: str) -> str:
+        if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
+            return path_or_url
+        if not self._config.rest_base_url:
+            raise ValueError("rest_base_url is required for relative REST paths.")
+        return urljoin(self._config.rest_base_url.rstrip("/") + "/", path_or_url.lstrip("/"))
+
+    async def _read_rest_payload(self, response: aiohttp.ClientResponse) -> Any:
+        try:
+            return await response.json(content_type=None)
+        except aiohttp.ContentTypeError:
+            return await response.text()
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         if self._session and not self._session.closed:
