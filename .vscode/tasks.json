@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "test",
+			"type": "shell",
+			"command": "./.venv/bin/uv",
+			"args": [
+				"run",
+				"pytest"
+			],
+			"isBackground": false,
+			"group": "test"
+		}
+	]
+}
