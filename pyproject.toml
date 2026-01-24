@@ -5,11 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aionatgrid"
 version = "0.1.0"
-description = "Async Python client for National Grid's GraphQL API built on aiohttp"
+description = "Async Python client for National Grid built on aiohttp"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
-authors = [{ name = "Aionatgrid Maintainers" }]
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Ryan Morash", email = "ryan@morash.me"}
+    ]
 keywords = ["national-grid", "graphql", "aiohttp", "asyncio"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -18,7 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Internet :: WWW/HTTP",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
     "aiohttp>=3.9",
@@ -27,6 +29,9 @@ dependencies = [
 ]
 
 dynamic = []
+
+[project.urls]
+repository = "https:/github.com/ryanmorash/aionatgrid"
 
 [project.optional-dependencies]
 dev = [
