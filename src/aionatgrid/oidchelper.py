@@ -30,6 +30,7 @@ async def async_auth_oidc(
     scope_access: str,
     self_asserted_endpoint: str,
     policy_confirm_endpoint: str,
+    login_data: dict[str, Any] | None = None,
 ) -> str | None:
     """Perform the login process and return an access token."""
     ssl_context = await asyncio.get_running_loop().run_in_executor(None, ssl.create_default_context)
@@ -41,7 +42,7 @@ async def async_auth_oidc(
         _LOGGER.debug("Generated PKCE code verifier and challenge")
         config = await _get_config(secure_session, base_url, tenant_id, policy)
         _LOGGER.debug("Retrieved OAuth configuration")
-        auth_code = await _get_auth(
+        auth_code, sub_value = await _get_auth(
             secure_session,
             config,
             code_challenge,
@@ -54,6 +55,8 @@ async def async_auth_oidc(
             self_asserted_endpoint,
             policy_confirm_endpoint,
         )
+        if sub_value and login_data is not None:
+            login_data["sub"] = sub_value
         if auth_code is None:
             _LOGGER.error("Failed to obtain authorization code")
             raise CannotConnectError("Failed to obtain authorization code")
@@ -131,11 +134,13 @@ async def _get_auth(
     policy: str,
     self_asserted_endpoint: str,
     policy_confirm_endpoint: str,
-) -> str | None:
+) -> tuple[str | None, str | None]:
     """Get the authorization code."""
     auth_params = {
         "client_id": client_id,
-        "response_type": "code",
+        "response_type": "code id_token",
+        "response_mode": "query",
+        "nonce": secrets.token_urlsafe(16),
         "redirect_uri": redirect_uri,
         "scope": scope_auth,
         "code_challenge": code_challenge,
@@ -150,11 +155,7 @@ async def _get_auth(
     settings = _extract_settings(auth_content)
     if not settings:
         _LOGGER.debug("No settings extracted, checking for direct authorization code")
-        if final_url and final_url.startswith(redirect_uri):
-            query = urlparse(final_url).query
-            parsed_query = parse_qs(query)
-            return parsed_query.get("code", [None])[0]
-        return None
+        return _extract_auth_result(final_url, redirect_uri)
 
     _LOGGER.debug("Posting credentials")
     await _post_credentials(
@@ -167,7 +168,7 @@ async def _get_auth(
         self_asserted_endpoint,
     )
     _LOGGER.debug("Confirming sign-in")
-    return await _confirm_signin(session, config["issuer"], settings, policy, policy_confirm_endpoint)
+    return await _confirm_signin(session, config["issuer"], settings, policy, policy_confirm_endpoint, redirect_uri)
 
 
 async def _get_access(
@@ -271,7 +272,8 @@ async def _confirm_signin(
     settings: dict[str, Any],
     policy: str,
     policy_confirm_endpoint: str,
-) -> str | None:
+    redirect_uri: str,
+) -> tuple[str | None, str | None]:
     """Confirm the sign-in process."""
     base_url = issuer.rsplit("/", 2)[0]
     _LOGGER.debug("Confirming sign-in at %s", base_url)
@@ -292,20 +294,61 @@ async def _confirm_signin(
             raise InvalidAuthError("Invalid username or password")
         raise CannotConnectError("Failed to confirm signin")
     if final_url:
-        query = urlparse(final_url).query
-        parsed_query = parse_qs(query)
-        auth_code = parsed_query.get("code", [None])[0]
+        auth_code, sub_value = _extract_auth_result(final_url, redirect_uri)
         if auth_code:
             _LOGGER.debug("Sign-in confirmed, authorization code obtained")
-        elif "error" in parsed_query:
-            _LOGGER.error(
-                "Sign-in failed with error: %s, %s",
-                parsed_query.get("error"),
-                parsed_query.get("error_description"),
-            )
-            raise InvalidAuthError("Sign-in failed")
         else:
+            parsed_params = _parse_redirect_params(final_url)
+            if "error" in parsed_params:
+                _LOGGER.error(
+                    "Sign-in failed with error: %s, %s",
+                    parsed_params.get("error"),
+                    parsed_params.get("error_description"),
+                )
+                raise InvalidAuthError("Sign-in failed")
             _LOGGER.warning("Sign-in confirmed, but no authorization code found")
-        return auth_code
+        return auth_code, sub_value
     _LOGGER.warning("Sign-in confirmation did not result in a final URL")
-    return None
+    return None, None
+
+
+def _extract_auth_result(final_url: str | None, redirect_uri: str) -> tuple[str | None, str | None]:
+    if not final_url or not final_url.startswith(redirect_uri):
+        return None, None
+    parsed_params = _parse_redirect_params(final_url)
+    auth_code = parsed_params.get("code", [None])[0]
+    id_token = parsed_params.get("id_token", [None])[0]
+    sub_value = _extract_sub_from_id_token(id_token) if id_token else None
+    return auth_code, sub_value
+
+
+def _parse_redirect_params(final_url: str) -> dict[str, list[str]]:
+    parsed = urlparse(final_url)
+    fragment = parsed.fragment
+    query = parsed.query
+    if fragment:
+        return parse_qs(fragment)
+    return parse_qs(query)
+
+
+def _extract_sub_from_id_token(id_token: str | None) -> str | None:
+    if not id_token:
+        return None
+    parts = id_token.split(".")
+    if len(parts) < 2:
+        _LOGGER.warning("Invalid id_token format")
+        return None
+    payload = parts[1]
+    padded = payload + "=" * (-len(payload) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
+        claims = json.loads(decoded)
+    except (ValueError, json.JSONDecodeError):
+        _LOGGER.exception("Failed to decode id_token payload")
+        return None
+    sub_value = claims.get("sub")
+    if sub_value:
+        _LOGGER.debug("Extracted sub from id_token")
+    else:
+        _LOGGER.debug("sub claim not found in id_token")
+    return sub_value

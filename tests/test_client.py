@@ -67,6 +67,26 @@ async def test_execute_returns_response_payload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_execute_uses_request_endpoint() -> None:
+    config = NationalGridConfig(endpoint="https://example.test/graphql")
+    session = MagicMock(spec=aiohttp.ClientSession)
+    session.closed = False
+    session.post.return_value = _DummyResponse({"data": {}})
+
+    client = NationalGridClient(config=config, session=session)
+    request = GraphQLRequest(
+        query="query Test { value }",
+        endpoint="https://example.test/override",
+    )
+
+    await client.execute(request)
+
+    args, kwargs = session.post.call_args
+    assert args[0] == "https://example.test/override"
+    assert kwargs["json"]["query"] == "query Test { value }"
+
+
+@pytest.mark.asyncio
 async def test_execute_merges_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     config = NationalGridConfig(
         endpoint="https://example.test/graphql",

@@ -22,8 +22,8 @@ The command creates a `.venv` managed by `uv` and installs runtime plus developm
 
 ## Usage
 1. Export the endpoints, OIDC credentials, and subscription key used by National Grid's services:
-   ```bash
-   export NATIONALGRID_GRAPHQL_ENDPOINT="https://api.nationalgrid.example/graphql"
+    ```bash
+    export NATIONALGRID_GRAPHQL_ENDPOINT="https://myaccount.nationalgrid.com/api/user-cu-uwp-gql"
     export NATIONALGRID_USERNAME="user@example.com"
     export NATIONALGRID_PASSWORD="replace-with-real-password"
     ```
@@ -93,6 +93,6 @@ All commands above also have Makefile shortcuts (see `Makefile`).
 ```
 
 ## Next steps
-- Replace the placeholder endpoint with your tenant-specific URL
+- Replace the endpoint if your environment uses a different GraphQL host
 - Extend the query helpers in `aionatgrid/graphql.py` for your data products
 - Integrate the client with your ETL or dashboarding stack

@@ -50,4 +50,5 @@ class NationalGridAuth:
             NationalGridAuth.SCOPE_ACCESS,
             NationalGridAuth.SELF_ASSERTED_ENDPOINT,
             NationalGridAuth.POLICY_CONFIRM_ENDPOINT,
+            login_data,
         )

@@ -14,3 +14,15 @@ class RestResponse:
     status: int
     headers: Mapping[str, str]
     data: Any
+
+
+@dataclass(slots=True)
+class RestRequest:
+    """Simple REST request scaffold."""
+
+    method: str
+    path_or_url: str
+    params: Mapping[str, str] | None = None
+    json: Any | None = None
+    data: Any | None = None
+    headers: Mapping[str, str] | None = None

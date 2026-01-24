@@ -15,6 +15,7 @@ class GraphQLRequest:
     query: str
     variables: Mapping[str, Any] | None = None
     operation_name: str | None = None
+    endpoint: str | None = None
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {"query": dedent(self.query).strip()}
