@@ -1,21 +1,15 @@
-- [x] Verify that the copilot-instructions.md file in the .github directory is created. (Created file as instructed.)
-
-- [x] Clarify Project Requirements (User requested an aiohttp-based Python library for National Grid's GraphQL API; no extra clarification needed.)
-
-- [x] Scaffold the Project (Created pyproject, Makefile, src/, tests/, and examples/ structure.)
-
-- [x] Customize the Project (Implemented aiohttp client, config helpers, tests, and examples.)
-
-- [x] Install Required Extensions (No extensions needed.)
-
-- [x] Compile the Project (Installed deps with uv sync and ran pytest.)
-
-- [x] Create and Run Task (Added VS Code task "test" to run `uv run pytest`.)
-
-- [x] Launch the Project (Ready to run example/debug once user confirms preferred mode.)
-
-- [x] Ensure Documentation is Complete (Verified README.md plus this file, removed HTML comments.)
-
-- Work through each checklist item systematically.
-- Keep communication concise and focused.
-- Follow development best practices.
+- Use `uv` for all Python dependency management and execution (no pip/poetry).
+- Preferred commands:
+	- `uv sync` to install dependencies (creates .venv).
+	- `uv run pytest` for tests (or `make test`).
+	- `uv run ruff check .` / `uv run ruff format .` for lint/format.
+	- `uv run mypy src` for type checking.
+- Use `async with NationalGridClient(...)` for session management; avoid manual `close()` unless necessary.
+- Preserve the multi-endpoint GraphQL routing pattern: each request targets its specific endpoint.
+- Keep GraphQL request building via `StandardQuery` and `compose_query()` helpers.
+- Authentication is required for production usage; do not bypass OIDC flow in library code.
+- All GraphQL calls must include the `ocp-apim-subscription-key` header from config.
+- Maintain the frozen `NationalGridConfig` API (`from_env`, `build_headers`, `with_overrides`).
+- Tests should mock `aiohttp.ClientSession` and `NationalGridAuth.async_login` as in existing patterns.
+- Use `pytest-asyncio` for async tests; keep tests in `tests/`.
+- Keep communication concise and focused; follow development best practices.
