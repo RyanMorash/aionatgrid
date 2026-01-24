@@ -25,9 +25,10 @@ export NATIONALGRID_GRAPHQL_ENDPOINT="https://myaccount.nationalgrid.com/api/use
 export NATIONALGRID_USERNAME="user@example.com"
 export NATIONALGRID_PASSWORD="your-password"
 
-uv run python examples/basic_usage.py       # Run basic example
-uv run python examples/interval-reads.py    # Run interval reads example
-uv run python examples/list-accounts.py     # Run account listing example
+uv run python examples/list-accounts.py     # List linked billing accounts
+uv run python examples/account-info.py      # Get billing account details
+uv run python examples/interval-reads.py    # Fetch interval read data
+uv run python examples/energy-usage.py      # Get energy usage data
 ```
 
 ### Makefile Shortcuts
@@ -37,7 +38,7 @@ make test       # Same as uv run pytest
 make lint       # Same as uv run ruff check .
 make format     # Same as uv run ruff format .
 make type       # Same as uv run mypy src
-make example    # Same as uv run python examples/basic_usage.py
+make example    # Same as uv run python examples/list-accounts.py
 make clean      # Remove cache directories
 ```
 

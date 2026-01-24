@@ -18,7 +18,7 @@ type:
 	uv run mypy src
 
 example:
-	uv run python examples/basic_usage.py
+	uv run python examples/list-accounts.py
 
 clean:
 	rm -rf .mypy_cache .pytest_cache ruff_cache
