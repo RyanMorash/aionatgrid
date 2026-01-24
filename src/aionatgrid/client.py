@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -12,7 +13,8 @@ from urllib.parse import urljoin
 import aiohttp
 
 from .auth import NationalGridAuth
-from .config import NationalGridConfig
+from .config import NationalGridConfig, RetryConfig
+from .exceptions import GraphQLError, RestAPIError, RetryExhaustedError
 from .graphql import GraphQLRequest, GraphQLResponse
 from .queries import (
     BILLING_ACCOUNT_INFO_SELECTION_SET,
@@ -70,6 +72,78 @@ class NationalGridClient:
             await self._session.close()
             self._session = None
 
+    def _calculate_retry_delay(self, attempt: int, retry_config: RetryConfig) -> float:
+        """Calculate retry delay with exponential backoff and jitter.
+
+        Args:
+            attempt: Current attempt number (0-indexed)
+            retry_config: Retry configuration
+
+        Returns:
+            Delay in seconds before next retry
+        """
+        # Exponential backoff: initial_delay * (base ^ attempt)
+        delay = retry_config.initial_delay * (retry_config.exponential_base**attempt)
+
+        # Cap at max_delay
+        delay = min(delay, retry_config.max_delay)
+
+        # Add jitter (±25% random variation) to prevent thundering herd
+        jitter = delay * 0.25 * (2 * random.random() - 1)
+        delay_with_jitter = delay + jitter
+
+        return max(0, delay_with_jitter)
+
+    def _should_retry(self, error: Exception, attempt: int, retry_config: RetryConfig) -> bool:
+        """Determine if request should be retried based on error and config.
+
+        Args:
+            error: The exception that occurred
+            attempt: Current attempt number (0-indexed)
+            retry_config: Retry configuration
+
+        Returns:
+            True if request should be retried, False otherwise
+        """
+        # Check if we've exhausted attempts
+        if attempt >= retry_config.max_attempts - 1:
+            return False
+
+        # Extract original error from wrapped exceptions
+        check_error = error
+        if isinstance(error, (GraphQLError, RestAPIError)):
+            if error.original_error:
+                check_error = error.original_error
+
+        # Retry on connection errors
+        if retry_config.retry_on_connection_errors and isinstance(
+            check_error, (aiohttp.ClientConnectionError, aiohttp.ServerDisconnectedError)
+        ):
+            return True
+
+        # Retry on timeout errors
+        if retry_config.retry_on_timeout and isinstance(
+            check_error, (aiohttp.ServerTimeoutError, asyncio.TimeoutError)
+        ):
+            return True
+
+        # Retry on specific HTTP status codes
+        if isinstance(check_error, aiohttp.ClientResponseError):
+            if check_error.status in retry_config.retry_on_status:
+                return True
+            # Also retry on 401 to trigger re-auth (but only once)
+            if check_error.status == 401 and attempt == 0:
+                return True
+
+        # Also check status directly on our custom errors
+        if isinstance(error, (GraphQLError, RestAPIError)):
+            if error.status and error.status in retry_config.retry_on_status:
+                return True
+            if error.status == 401 and attempt == 0:
+                return True
+
+        return False
+
     async def execute(
         self,
         request: GraphQLRequest,
@@ -77,28 +151,124 @@ class NationalGridClient:
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
     ) -> GraphQLResponse:
-        session = await self._ensure_session()
-        access_token = await self._get_access_token(session)
-        payload = request.to_payload()
-        merged_headers = self._config.build_headers(headers, access_token=access_token)
-        effective_timeout = aiohttp.ClientTimeout(total=timeout or self._config.timeout)
-        endpoint = request.endpoint or self._config.endpoint
+        """Execute a GraphQL request with retry logic.
 
-        logger.debug("POST %s", endpoint)
-        async with session.post(
-            endpoint,
-            json=payload,
-            headers=merged_headers,
-            timeout=effective_timeout,
-            ssl=self._config.verify_ssl,
-        ) as response:
-            response.raise_for_status()
-            body = await response.json(content_type=None)
+        Args:
+            request: GraphQL request to execute
+            headers: Additional headers to include
+            timeout: Request timeout in seconds
 
-        graphql_response = GraphQLResponse.from_payload(body)
-        if graphql_response.errors:
-            logger.warning("GraphQL errors returned: %s", graphql_response.errors)
-        return graphql_response
+        Returns:
+            GraphQL response
+
+        Raises:
+            GraphQLError: When the request fails after all retries
+            RetryExhaustedError: When all retry attempts are exhausted
+        """
+        retry_config = self._config.retry_config
+        last_error: Exception | None = None
+
+        for attempt in range(retry_config.max_attempts):
+            try:
+                session = await self._ensure_session()
+                access_token = await self._get_access_token(session)
+                payload = request.to_payload()
+                merged_headers = self._config.build_headers(headers, access_token=access_token)
+                effective_timeout = aiohttp.ClientTimeout(total=timeout or self._config.timeout)
+                endpoint = request.endpoint or self._config.endpoint
+
+                if attempt > 0:
+                    logger.info(
+                        "Retrying GraphQL request to %s (attempt %d/%d)",
+                        endpoint,
+                        attempt + 1,
+                        retry_config.max_attempts,
+                    )
+                else:
+                    logger.debug("POST %s", endpoint)
+
+                async with session.post(
+                    endpoint,
+                    json=payload,
+                    headers=merged_headers,
+                    timeout=effective_timeout,
+                    ssl=self._config.verify_ssl,
+                ) as response:
+                    try:
+                        response.raise_for_status()
+                    except aiohttp.ClientResponseError as e:
+                        # Special handling for 401: clear token and retry
+                        if e.status == 401:
+                            logger.info("Received 401, clearing cached token")
+                            self._access_token = None
+                            self._token_expires_at = None
+
+                        # Read response body for error context
+                        try:
+                            body = await response.json(content_type=None)
+                        except Exception:
+                            body = None
+
+                        raise GraphQLError(
+                            f"GraphQL request failed with status {e.status}",
+                            endpoint=endpoint,
+                            query=request.query,
+                            variables=dict(request.variables) if request.variables else None,
+                            status=e.status,
+                            response_body=body,
+                            original_error=e,
+                        ) from e
+
+                    body = await response.json(content_type=None)
+
+                graphql_response = GraphQLResponse.from_payload(body)
+                if graphql_response.errors:
+                    logger.warning("GraphQL errors returned: %s", graphql_response.errors)
+                return graphql_response
+
+            except Exception as e:
+                last_error = e
+
+                # Check if we should retry this error
+                should_retry = self._should_retry(e, attempt, retry_config)
+
+                # Check if this is the last attempt
+                is_last_attempt = attempt >= retry_config.max_attempts - 1
+
+                # If not retryable, raise immediately (unless last attempt)
+                if not should_retry and not is_last_attempt:
+                    # Convert generic errors to GraphQLError with context
+                    if not isinstance(e, GraphQLError):
+                        raise GraphQLError(
+                            f"GraphQL request failed: {e}",
+                            endpoint=request.endpoint or self._config.endpoint,
+                            query=request.query,
+                            variables=dict(request.variables) if request.variables else None,
+                            original_error=e,
+                        ) from e
+                    raise
+
+                # Last attempt: fall through to RetryExhaustedError
+                if is_last_attempt:
+                    break
+
+                # Calculate delay and retry
+                delay = self._calculate_retry_delay(attempt, retry_config)
+                logger.warning(
+                    "Request failed (%s), retrying in %.2f seconds (attempt %d/%d)",
+                    type(e).__name__,
+                    delay,
+                    attempt + 1,
+                    retry_config.max_attempts,
+                )
+                await asyncio.sleep(delay)
+
+        # All retries exhausted
+        raise RetryExhaustedError(
+            "GraphQL request failed after all retry attempts",
+            attempts=retry_config.max_attempts,
+            last_error=last_error or Exception("Unknown error"),
+        )
 
     async def request_rest(
         self,
@@ -111,37 +281,134 @@ class NationalGridClient:
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
     ) -> RestResponse:
-        """Issue a REST request against the configured base URL."""
+        """Issue a REST request with retry logic.
 
-        session = await self._ensure_session()
-        access_token = await self._get_access_token(session)
-        url = self._resolve_rest_url(path_or_url)
-        content_type = "application/json" if json is not None else None
-        merged_headers = self._config.build_headers(
-            headers,
-            access_token=access_token,
-            content_type=content_type,
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            path_or_url: URL path or full URL
+            params: Query parameters
+            json: JSON payload
+            data: Form data
+            headers: Additional headers
+            timeout: Request timeout in seconds
+
+        Returns:
+            REST response
+
+        Raises:
+            RestAPIError: When the request fails after all retries
+            RetryExhaustedError: When all retry attempts are exhausted
+        """
+        retry_config = self._config.retry_config
+        last_error: Exception | None = None
+
+        for attempt in range(retry_config.max_attempts):
+            try:
+                session = await self._ensure_session()
+                access_token = await self._get_access_token(session)
+                url = self._resolve_rest_url(path_or_url)
+                content_type = "application/json" if json is not None else None
+                merged_headers = self._config.build_headers(
+                    headers,
+                    access_token=access_token,
+                    content_type=content_type,
+                )
+                effective_timeout = aiohttp.ClientTimeout(total=timeout or self._config.timeout)
+
+                if attempt > 0:
+                    logger.info(
+                        "Retrying REST request to %s (attempt %d/%d)",
+                        url,
+                        attempt + 1,
+                        retry_config.max_attempts,
+                    )
+                else:
+                    logger.debug("%s %s", method.upper(), url)
+
+                async with session.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    json=json,
+                    data=data,
+                    headers=merged_headers,
+                    timeout=effective_timeout,
+                    ssl=self._config.verify_ssl,
+                ) as response:
+                    try:
+                        response.raise_for_status()
+                    except aiohttp.ClientResponseError as e:
+                        # Special handling for 401: clear token and retry
+                        if e.status == 401:
+                            logger.info("Received 401, clearing cached token")
+                            self._access_token = None
+                            self._token_expires_at = None
+
+                        # Read response body for error context
+                        try:
+                            response_text = await response.text()
+                        except Exception:
+                            response_text = None
+
+                        raise RestAPIError(
+                            f"REST request failed with status {e.status}",
+                            url=url,
+                            method=method,
+                            status=e.status,
+                            response_text=response_text,
+                            original_error=e,
+                        ) from e
+
+                    payload = await self._read_rest_payload(response)
+                    return RestResponse(
+                        status=response.status,
+                        headers=dict(response.headers),
+                        data=payload,
+                    )
+
+            except Exception as e:
+                last_error = e
+
+                # Check if we should retry this error
+                should_retry = self._should_retry(e, attempt, retry_config)
+
+                # Check if this is the last attempt
+                is_last_attempt = attempt >= retry_config.max_attempts - 1
+
+                # If not retryable, raise immediately (unless last attempt)
+                if not should_retry and not is_last_attempt:
+                    # Convert generic errors to RestAPIError with context
+                    if not isinstance(e, RestAPIError):
+                        url = self._resolve_rest_url(path_or_url)
+                        raise RestAPIError(
+                            f"REST request failed: {e}",
+                            url=url,
+                            method=method,
+                            original_error=e,
+                        ) from e
+                    raise
+
+                # Last attempt: fall through to RetryExhaustedError
+                if is_last_attempt:
+                    break
+
+                # Calculate delay and retry
+                delay = self._calculate_retry_delay(attempt, retry_config)
+                logger.warning(
+                    "Request failed (%s), retrying in %.2f seconds (attempt %d/%d)",
+                    type(e).__name__,
+                    delay,
+                    attempt + 1,
+                    retry_config.max_attempts,
+                )
+                await asyncio.sleep(delay)
+
+        # All retries exhausted
+        raise RetryExhaustedError(
+            "REST request failed after all retry attempts",
+            attempts=retry_config.max_attempts,
+            last_error=last_error or Exception("Unknown error"),
         )
-        effective_timeout = aiohttp.ClientTimeout(total=timeout or self._config.timeout)
-
-        logger.debug("%s %s", method.upper(), url)
-        async with session.request(
-            method=method,
-            url=url,
-            params=params,
-            json=json,
-            data=data,
-            headers=merged_headers,
-            timeout=effective_timeout,
-            ssl=self._config.verify_ssl,
-        ) as response:
-            response.raise_for_status()
-            payload = await self._read_rest_payload(response)
-            return RestResponse(
-                status=response.status,
-                headers=dict(response.headers),
-                data=payload,
-            )
 
     async def _get_access_token(self, session: aiohttp.ClientSession) -> str | None:
         # Check if we have a valid cached token

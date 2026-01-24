@@ -1,7 +1,15 @@
 """Public package exports for aionatgrid."""
 
 from .client import NationalGridClient
-from .config import NationalGridConfig
+from .config import NationalGridConfig, RetryConfig
+from .exceptions import (
+    CannotConnectError,
+    GraphQLError,
+    InvalidAuthError,
+    NationalGridError,
+    RestAPIError,
+    RetryExhaustedError,
+)
 from .graphql import GraphQLRequest, GraphQLResponse
 from .queries import (
     DEFAULT_SELECTION_SET,
@@ -16,6 +24,7 @@ from .rest_queries import RealtimeMeterInfo, realtime_meter_info_request
 __all__ = [
     "NationalGridClient",
     "NationalGridConfig",
+    "RetryConfig",
     "GraphQLRequest",
     "GraphQLResponse",
     "DEFAULT_SELECTION_SET",
@@ -27,4 +36,11 @@ __all__ = [
     "linked_billing_accounts_request",
     "RealtimeMeterInfo",
     "realtime_meter_info_request",
+    # Exceptions
+    "NationalGridError",
+    "GraphQLError",
+    "RestAPIError",
+    "RetryExhaustedError",
+    "CannotConnectError",
+    "InvalidAuthError",
 ]

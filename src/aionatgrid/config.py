@@ -11,6 +11,19 @@ DEFAULT_TIMEOUT = 30.0
 
 
 @dataclass(slots=True)
+class RetryConfig:
+    """Configuration for retry behavior."""
+
+    max_attempts: int = 3  # Maximum number of attempts (including initial request)
+    initial_delay: float = 1.0  # Initial retry delay in seconds
+    max_delay: float = 10.0  # Maximum retry delay in seconds
+    exponential_base: float = 2.0  # Base for exponential backoff
+    retry_on_status: tuple[int, ...] = (408, 429, 500, 502, 503, 504)  # HTTP statuses to retry
+    retry_on_connection_errors: bool = True  # Retry on connection errors
+    retry_on_timeout: bool = True  # Retry on timeout errors
+
+
+@dataclass(slots=True)
 class NationalGridConfig:
     """Holds reusable client configuration."""
 
@@ -22,6 +35,7 @@ class NationalGridConfig:
     default_headers: Mapping[str, str] = field(default_factory=dict)
     timeout: float = DEFAULT_TIMEOUT
     verify_ssl: bool = True
+    retry_config: RetryConfig = field(default_factory=RetryConfig)
 
     @classmethod
     def from_env(
