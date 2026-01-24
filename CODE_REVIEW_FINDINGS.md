@@ -1,0 +1,496 @@
+# Code Review Findings - Post High-Severity Fixes
+
+Comprehensive review conducted after fixing critical and high-severity issues.
+
+## Summary
+- **Medium-Severity Issues**: 5 remaining (3 completed ✅)
+- **Low-Severity Issues**: 9 found
+- **Code Quality Improvements**: 6 identified
+- **Testing Gaps**: Partially addressed (retry tests added)
+
+## Recent Changes (2026-01-24)
+
+**Commit aafedbe**: "Enhance National Grid API integration with error context and retry logic"
+
+Addressed the top-priority medium-severity issues:
+- ✅ **Issue #1** - Error Context: Implemented `GraphQLError`, `RestAPIError`, and `RetryExhaustedError` with detailed context (endpoint, query, status, response, original error)
+- ✅ **Issue #2** - Retry Logic: Implemented exponential backoff with jitter, configurable via `RetryConfig` dataclass
+- ✅ **Issue #7** - 401 Handling: Automatic token clearing and re-authentication on 401 errors
+- ✅ **Testing**: Added `tests/test_retry.py` with 9 comprehensive retry scenario tests
+
+**Impact**: Significantly improved operational reliability and debugging experience.
+
+---
+
+## Medium-Severity Issues
+
+### 1. ~~No Error Context on HTTP Failures~~ ✅ COMPLETED
+**Location**: `client.py:95, 138`
+
+**Status**: **FIXED** - Implemented comprehensive error context with custom exception hierarchy.
+
+**What Was Implemented**:
+- Created `GraphQLError` and `RestAPIError` exception classes with detailed context
+- Both exceptions capture: endpoint, query/URL, variables, status code, response body, and original error
+- Custom `__str__()` methods provide detailed error messages with truncated previews
+- All HTTP errors are now wrapped with proper context before being raised
+- `RetryExhaustedError` tracks number of attempts and preserves last error
+
+**Files Modified**:
+- `src/aionatgrid/exceptions.py` - New exception classes
+- `src/aionatgrid/client.py` - Error handling with context
+- `tests/test_retry.py` - Tests verifying error context inclusion
+
+### 2. ~~No Retry Logic for Transient Failures~~ ✅ COMPLETED
+**Location**: `client.py:73-101, 103-144`
+
+**Status**: **FIXED** - Implemented comprehensive retry logic with exponential backoff.
+
+**What Was Implemented**:
+- `RetryConfig` dataclass for configurable retry behavior
+  - `max_attempts` (default: 3)
+  - `initial_delay` (default: 1.0s)
+  - `max_delay` (default: 10.0s)
+  - `exponential_base` (default: 2.0)
+  - Configurable status codes to retry (408, 429, 500, 502, 503, 504)
+- Exponential backoff with ±25% jitter to prevent thundering herd
+- Automatic retry on:
+  - Connection errors
+  - Timeout errors
+  - Configurable 5xx server errors
+  - Rate limit errors (429)
+- Smart retry logic: doesn't retry client errors (4xx except 401)
+- `_calculate_retry_delay()` method for backoff calculation
+- Both `execute()` and `request_rest()` methods support retry
+
+**Files Modified**:
+- `src/aionatgrid/config.py` - RetryConfig dataclass
+- `src/aionatgrid/client.py` - Retry loop implementation
+- `tests/test_retry.py` - 9 comprehensive retry tests
+
+### 3. Weak Type Safety for Login Data ⚠️
+**Location**: `client.py:50, 229-231`
+
+**Problem**:
+```python
+self._login_data: dict[str, Any] = {}  # No schema
+# Later used as:
+sub_value = self._login_data.get("sub")
+```
+
+This dict is mutated across multiple functions with no type enforcement. Keys like "sub" are magic strings.
+
+**Impact**: Potential KeyErrors, type confusion, difficult to maintain.
+
+**Recommendation**:
+```python
+from typing import TypedDict
+
+class LoginData(TypedDict, total=False):
+    sub: str  # User ID from JWT
+    # Add other fields as needed
+
+self._login_data: LoginData = {}
+```
+
+### 4. Unused Exception Classes ⚠️
+**Location**: `exceptions.py:12-13, 16-40`
+
+**Problem**:
+- `MfaChallengeError` is defined but never raised anywhere
+- `ApiError` is well-designed but never used
+
+**Impact**: Dead code increases maintenance burden and confuses users about error handling.
+
+**Recommendation**:
+- Either use these exceptions or remove them
+- If MFA is planned for future, add a TODO comment
+- Consider using `ApiError` to wrap HTTP failures with context
+
+### 5. Hardcoded Timeout in Authentication ⚠️
+**Location**: `oidchelper.py:225`
+
+**Problem**:
+```python
+timeout = aiohttp.ClientTimeout(total=30)  # Hardcoded!
+```
+
+Authentication requests use a hardcoded 30-second timeout instead of respecting the configured timeout in `NationalGridConfig`.
+
+**Impact**: Users cannot configure auth timeouts separately, which may be needed for slow networks.
+
+**Recommendation**:
+```python
+# Pass config timeout or make auth timeout configurable
+timeout = aiohttp.ClientTimeout(total=config.get("auth_timeout", 30))
+```
+
+### 6. No Connection Pooling Configuration ⚠️
+**Location**: `client.py:205`
+
+**Problem**:
+```python
+self._session = aiohttp.ClientSession(timeout=timeout)
+# No connector configuration!
+```
+
+Session doesn't configure connection limits. Default aiohttp limits are:
+- 100 connections per host
+- 0 (unlimited) total connections
+
+**Impact**: Could lead to resource exhaustion with many concurrent requests.
+
+**Recommendation**:
+```python
+connector = aiohttp.TCPConnector(
+    limit=100,  # Total connections
+    limit_per_host=30,  # Per-host limit
+    ttl_dns_cache=300,  # DNS cache TTL
+)
+self._session = aiohttp.ClientSession(
+    timeout=timeout,
+    connector=connector
+)
+```
+
+### 7. ~~No Handling of 401 Errors to Trigger Re-auth~~ ✅ COMPLETED
+**Location**: `client.py:95, 138`
+
+**Status**: **FIXED** - 401 errors now automatically trigger re-authentication.
+
+**What Was Implemented**:
+- 401 errors are detected and trigger special handling
+- Cached access token is cleared (`self._access_token = None`)
+- Token expiry timestamp is cleared (`self._token_expires_at = None`)
+- Request is retried once after re-authentication
+- Integrated into retry loop - 401 gets one retry attempt
+- Test coverage for 401 handling with token clearing
+
+**Implementation Details**:
+```python
+if isinstance(e, aiohttp.ClientResponseError) and e.status == 401:
+    logger.info("Received 401, clearing cached token for re-auth")
+    self._access_token = None
+    self._token_expires_at = None
+    should_retry = True  # Always retry 401 once
+```
+
+**Files Modified**:
+- `src/aionatgrid/client.py` - 401 detection and token clearing
+- `tests/test_retry.py` - Test for 401 re-auth flow
+
+### 8. Response Body Potentially Logged at Warning Level ⚠️
+**Location**: `client.py:100`
+
+**Problem**:
+```python
+logger.warning("GraphQL errors returned: %s", graphql_response.errors)
+```
+
+GraphQL errors might contain sensitive data (user IDs, account numbers, etc.) but are logged at warning level.
+
+**Impact**: Sensitive data could leak into logs.
+
+**Recommendation**:
+- Log at debug level, or
+- Sanitize error messages before logging, or
+- Make logging level configurable
+
+---
+
+## Low-Severity Issues
+
+### 1. Magic Number for Token Expiry Buffer 📝
+**Location**: `client.py:31`
+
+**Issue**: `TOKEN_EXPIRY_BUFFER_SECONDS = 300` - Why 5 minutes? This should be documented or configurable.
+
+**Recommendation**: Add docstring explaining the choice or make it configurable in `NationalGridConfig`.
+
+### 2. No Connection Reuse Metrics 📝
+**Location**: `client.py` (entire file)
+
+**Issue**: No way to monitor session health (number of connections, failed requests, etc.)
+
+**Recommendation**: Add metrics/stats property:
+```python
+def get_session_stats(self) -> dict[str, Any]:
+    """Return session statistics for monitoring."""
+    if not self._session:
+        return {}
+    return {
+        "closed": self._session.closed,
+        "connector_stats": self._session.connector._conns,
+        # etc
+    }
+```
+
+### 3. Inconsistent Async Method Naming 📝
+**Location**: `auth.py:32-54`
+
+**Issue**: Method is named `async_login()` but it's already async. The `async_` prefix is redundant in async context.
+
+**Recommendation**: Rename to just `login()` since the `async def` already indicates it's async.
+
+### 4. No Validation of Response Content Types 📝
+**Location**: `client.py:96, 139, 189-191`
+
+**Issue**: Code ignores content-type with `content_type=None`, which could hide API changes or errors.
+
+**Recommendation**: Validate expected content types or at least log warnings on mismatches.
+
+### 5. Missing Docstrings on Private Methods 📝
+**Location**: Multiple files
+
+**Issue**: Private methods like `_get_access_token`, `_ensure_session`, `_extract_settings` lack docstrings.
+
+**Recommendation**: Add docstrings explaining purpose and parameters, especially for complex logic.
+
+### 6. No Explicit Charset Handling 📝
+**Location**: `oidchelper.py:229`
+
+**Issue**:
+```python
+content = await response.text()  # What charset?
+```
+
+**Recommendation**: Explicitly specify charset or handle encoding errors:
+```python
+content = await response.text(encoding='utf-8', errors='replace')
+```
+
+### 7. Ping Method Returns Boolean But Could Return More Info 📝
+**Location**: `client.py:208-213`
+
+**Issue**: Ping just returns True/False, but could return latency, endpoint status, etc.
+
+**Recommendation**:
+```python
+@dataclass
+class PingResult:
+    success: bool
+    latency_ms: float
+    endpoint: str
+
+async def ping(self) -> PingResult:
+    start = time.time()
+    ...
+    return PingResult(
+        success=response.data is not None,
+        latency_ms=(time.time() - start) * 1000,
+        endpoint=endpoint
+    )
+```
+
+### 8. Session Not Closed on __init__ Failure 📝
+**Location**: `client.py:37-50`
+
+**Issue**: If something fails during `__init__`, partially created resources aren't cleaned up. (Though this is rare since __init__ is mostly assignments)
+
+**Recommendation**: Not critical, but could add cleanup in __del__ for safety.
+
+### 9. Type Annotations Missing for Kwargs 📝
+**Location**: `oidchelper.py:221`
+
+**Issue**:
+```python
+async def _fetch(session: aiohttp.ClientSession, url: str, **kwargs: Any)
+```
+
+The `**kwargs` accepts `Any`, making it hard to know what's actually passed.
+
+**Recommendation**: Use TypedDict or explicit parameters for type safety.
+
+---
+
+## Code Quality Improvements
+
+### 1. Add Circuit Breaker Pattern 💡
+
+For production reliability, consider implementing circuit breaker pattern to prevent cascading failures when National Grid's API is down.
+
+**Libraries**: `pycircuitbreaker`, `pybreaker`
+
+### 2. Add Request/Response Logging Hooks 💡
+
+Allow users to inject custom logging/monitoring:
+
+```python
+class NationalGridClient:
+    def __init__(
+        self,
+        config: NationalGridConfig | None = None,
+        *,
+        session: aiohttp.ClientSession | None = None,
+        on_request: Callable | None = None,  # Hook before request
+        on_response: Callable | None = None,  # Hook after response
+    ):
+        ...
+```
+
+### 3. Add Connection Pool Status Method 💡
+
+Help users debug connection issues:
+
+```python
+async def get_pool_status(self) -> dict:
+    """Get connection pool statistics."""
+    ...
+```
+
+### 4. Support Custom User-Agent 💡
+
+Currently no way to customize User-Agent header. Some APIs track/limit by UA.
+
+```python
+class NationalGridConfig:
+    user_agent: str = "aionatgrid/0.1.0"
+```
+
+### 5. Add Rate Limiting Support 💡
+
+National Grid likely has rate limits. Add built-in rate limiting:
+
+```python
+from aiolimiter import AsyncLimiter
+
+class NationalGridClient:
+    def __init__(self, ..., rate_limit: AsyncLimiter | None = None):
+        self._rate_limiter = rate_limit
+```
+
+### 6. Add Context Manager for Batch Operations 💡
+
+For efficiency when making many requests:
+
+```python
+async with client.batch() as batch:
+    results = await asyncio.gather(
+        batch.execute(query1),
+        batch.execute(query2),
+        batch.execute(query3),
+    )
+```
+
+---
+
+## Testing Gaps 🧪
+
+### ✅ Recently Added Test Coverage
+**New test file**: `tests/test_retry.py` (9 tests, all passing)
+1. ✅ Retry on 500 errors with exponential backoff
+2. ✅ RetryExhaustedError after max attempts
+3. ✅ 401 error handling with token clearing and re-auth
+4. ✅ GraphQL error context inclusion
+5. ✅ REST API error context inclusion
+6. ✅ No retry on 400 client errors
+7. ✅ Retry on timeout errors
+8. ✅ Custom retry configuration
+9. ✅ Retry delay calculation with jitter
+
+### Missing Test Coverage
+
+**No tests exist for**:
+1. `graphql.py` - GraphQL request/response handling
+2. `queries.py` - Query builder logic
+3. `rest.py` - REST request/response handling
+4. `rest_queries.py` - REST query builders
+5. `oidchelper.py` - Complete OIDC authentication flow
+6. `helpers.py` - Cookie jar creation
+
+**Inadequate test coverage for**:
+1. Token expiration and refresh logic
+2. Concurrent request handling
+3. Session management edge cases
+
+### Recommended Tests
+
+**Priority 1 - Error Scenarios**:
+```python
+async def test_execute_retries_on_401():
+    """Verify 401 triggers re-auth and retry."""
+
+async def test_token_refresh_on_expiry():
+    """Verify token refreshes before expiration."""
+
+async def test_concurrent_token_refresh():
+    """Verify only one token refresh happens concurrently."""
+```
+
+**Priority 2 - Integration Tests**:
+```python
+async def test_full_auth_flow():
+    """Test complete OIDC authentication flow."""
+
+async def test_graphql_query_builder():
+    """Test query construction with variables."""
+```
+
+**Priority 3 - Edge Cases**:
+```python
+async def test_session_closed_during_request():
+    """Handle session closing mid-request."""
+
+async def test_malformed_settings_extraction():
+    """Test HTML parsing fallback strategies."""
+```
+
+---
+
+## Security Audit Results ✅
+
+**No critical security issues found:**
+- ✅ No `eval()` or `exec()` usage
+- ✅ No `shell=True` in subprocess calls
+- ✅ No pickle/marshal usage
+- ✅ No bare except clauses
+- ✅ No credentials logged
+- ✅ JWT signature verification implemented
+- ✅ Token expiration enforced
+- ✅ PKCE implemented correctly
+
+---
+
+## Recommendations by Priority
+
+### ✅ Completed
+1. ~~Add error context to HTTP failures (#1)~~ - DONE
+2. ~~Implement basic retry logic (#2)~~ - DONE
+3. ~~Handle 401 errors with automatic re-auth (#7)~~ - DONE
+4. ~~Write tests for error scenarios~~ - DONE (9 retry tests added)
+
+### Immediate (Should Fix Soon)
+1. Remove or use dead exception classes (#4)
+2. Fix hardcoded timeout in authentication (#5)
+3. Add connection pool configuration (#6)
+
+### Short-Term (Next Sprint)
+1. Improve type safety for login_data (#3)
+2. Review response body logging security (#8)
+3. Add circuit breaker pattern
+4. Expand test coverage for untested modules
+
+### Long-Term (Future Enhancements)
+1. Add comprehensive test suite
+2. Implement rate limiting
+3. Add monitoring/metrics hooks
+4. Support request/response middleware
+
+---
+
+## Conclusion
+
+The codebase is in **excellent shape** after the recent improvements. No critical or high-severity issues remain. The most important medium-severity issues around **error context and retry logic have been addressed**.
+
+**Overall Code Quality**: A- (Very Good)
+- Strong: Type safety, async/await usage, documentation, error handling, retry logic
+- Needs work: Connection pooling, test coverage for untested modules, operational monitoring
+
+**Recent Improvements** (commit aafedbe):
+- ✅ Comprehensive error context with custom exception hierarchy
+- ✅ Exponential backoff retry logic with jitter
+- ✅ Automatic 401 re-authentication
+- ✅ 9 new tests for retry scenarios (17 total tests, all passing)
+- ✅ Configurable retry behavior via RetryConfig
+
+**Next Steps**: Focus on remaining medium-severity issues (connection pooling, type safety for login_data) and expanding test coverage to untested modules.
