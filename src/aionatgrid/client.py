@@ -530,13 +530,17 @@ class NationalGridClient:
         timeout: float | None = None,
     ) -> GraphQLResponse:
         """Execute the billing account information scaffold query."""
-
-        request = billing_account_info_request(
-            selection_set=selection_set,
-            variables=variables,
-            variable_definitions=variable_definitions,
-            field_arguments=field_arguments,
-        )
+        # Only pass variable_definitions and field_arguments if explicitly set
+        # to avoid overriding the defaults in billing_account_info_request
+        kwargs: dict[str, Any] = {
+            "selection_set": selection_set,
+            "variables": variables,
+        }
+        if variable_definitions is not None:
+            kwargs["variable_definitions"] = variable_definitions
+        if field_arguments is not None:
+            kwargs["field_arguments"] = field_arguments
+        request = billing_account_info_request(**kwargs)
         return await self.execute(request, headers=headers, timeout=timeout)
 
     async def energy_usage(
