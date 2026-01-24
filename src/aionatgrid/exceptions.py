@@ -139,3 +139,34 @@ class RetryExhaustedError(NationalGridError):
         return (
             f"{super().__str__()} (after {self.attempts} attempts)\nLast error: {self.last_error}"
         )
+
+
+class DataExtractionError(NationalGridError):
+    """Raised when expected data cannot be extracted from a response."""
+
+    def __init__(
+        self,
+        message: str,
+        path: str,
+        response_data: Any | None = None,
+    ) -> None:
+        """Initialize data extraction error.
+
+        Args:
+            message: Human-readable error message
+            path: The data path that could not be extracted
+            response_data: The response data that was being extracted from
+        """
+        super().__init__(message)
+        self.path = path
+        self.response_data = response_data
+
+    def __str__(self) -> str:
+        """Return detailed error representation."""
+        parts = [super().__str__()]
+        parts.append(f"Path: {self.path}")
+        if self.response_data is not None:
+            data_str = str(self.response_data)
+            data_preview = data_str[:200] + "..." if len(data_str) > 200 else data_str
+            parts.append(f"Response data: {data_preview}")
+        return "\n".join(parts)

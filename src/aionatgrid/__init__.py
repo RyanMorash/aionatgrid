@@ -4,13 +4,35 @@ from .client import NationalGridClient
 from .config import NationalGridConfig, RetryConfig
 from .exceptions import (
     CannotConnectError,
+    DataExtractionError,
     GraphQLError,
     InvalidAuthError,
     NationalGridError,
     RestAPIError,
     RetryExhaustedError,
 )
+from .extractors import (
+    extract_billing_account,
+    extract_energy_usage_costs,
+    extract_energy_usages,
+    extract_linked_accounts,
+)
 from .graphql import GraphQLRequest, GraphQLResponse
+from .models import (
+    AccountLink,
+    AccountLinksConnection,
+    BillingAccount,
+    CustomerInfo,
+    EnergyUsage,
+    EnergyUsageCost,
+    EnergyUsageCostsConnection,
+    EnergyUsagesConnection,
+    FuelType,
+    IntervalRead,
+    Meter,
+    MeterConnection,
+    ServiceAddress,
+)
 from .oidchelper import LoginData
 from .queries import (
     DEFAULT_SELECTION_SET,
@@ -49,6 +71,26 @@ __all__ = [
     "GraphQLError",
     "RestAPIError",
     "RetryExhaustedError",
+    "DataExtractionError",
     "CannotConnectError",
     "InvalidAuthError",
+    # TypedDict models
+    "AccountLink",
+    "AccountLinksConnection",
+    "BillingAccount",
+    "CustomerInfo",
+    "EnergyUsage",
+    "EnergyUsageCost",
+    "EnergyUsageCostsConnection",
+    "EnergyUsagesConnection",
+    "FuelType",
+    "IntervalRead",
+    "Meter",
+    "MeterConnection",
+    "ServiceAddress",
+    # Extraction helpers
+    "extract_linked_accounts",
+    "extract_billing_account",
+    "extract_energy_usage_costs",
+    "extract_energy_usages",
 ]

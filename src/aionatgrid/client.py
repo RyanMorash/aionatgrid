@@ -7,6 +7,7 @@ import logging
 import random
 import time
 from collections.abc import Mapping, Sequence
+from datetime import date
 from typing import Any
 from urllib.parse import urljoin
 
@@ -15,7 +16,14 @@ import aiohttp
 from .auth import NationalGridAuth
 from .config import NationalGridConfig, RetryConfig
 from .exceptions import GraphQLError, RestAPIError, RetryExhaustedError
+from .extractors import (
+    extract_billing_account,
+    extract_energy_usage_costs,
+    extract_energy_usages,
+    extract_linked_accounts,
+)
 from .graphql import GraphQLRequest, GraphQLResponse
+from .models import AccountLink, BillingAccount, EnergyUsage, EnergyUsageCost
 from .oidchelper import LoginData
 from .queries import (
     BILLING_ACCOUNT_INFO_SELECTION_SET,
@@ -630,3 +638,134 @@ class NationalGridClient:
             headers=request.headers,
             timeout=timeout,
         )
+
+    # -------------------------------------------------------------------------
+    # Typed convenience methods
+    # -------------------------------------------------------------------------
+
+    async def get_linked_accounts(
+        self,
+        *,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> list[AccountLink]:
+        """Get linked billing accounts with typed response.
+
+        Args:
+            headers: Additional headers to include
+            timeout: Request timeout in seconds
+
+        Returns:
+            List of account links
+
+        Raises:
+            GraphQLError: When the GraphQL request fails
+            DataExtractionError: When the expected data path is missing
+            ValueError: When the response contains GraphQL errors
+        """
+        response = await self.linked_billing_accounts(headers=headers, timeout=timeout)
+        return extract_linked_accounts(response)
+
+    async def get_billing_account(
+        self,
+        account_number: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> BillingAccount:
+        """Get billing account info with typed response.
+
+        Args:
+            account_number: The billing account number
+            headers: Additional headers to include
+            timeout: Request timeout in seconds
+
+        Returns:
+            Billing account information
+
+        Raises:
+            GraphQLError: When the GraphQL request fails
+            DataExtractionError: When the expected data path is missing
+            ValueError: When the response contains GraphQL errors
+        """
+        response = await self.billing_account_info(
+            variables={"accountNumber": account_number},
+            headers=headers,
+            timeout=timeout,
+        )
+        return extract_billing_account(response)
+
+    async def get_energy_usage_costs(
+        self,
+        account_number: str,
+        query_date: date | str,
+        company_code: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> list[EnergyUsageCost]:
+        """Get energy usage costs with typed response.
+
+        Args:
+            account_number: The billing account number
+            query_date: Date for the query (date object or ISO string YYYY-MM-DD)
+            company_code: Company code value (e.g., "NECO", "KEDNE")
+            headers: Additional headers to include
+            timeout: Request timeout in seconds
+
+        Returns:
+            List of energy usage costs
+
+        Raises:
+            GraphQLError: When the GraphQL request fails
+            DataExtractionError: When the expected data path is missing
+            ValueError: When the response contains GraphQL errors
+        """
+        date_str = query_date.isoformat() if isinstance(query_date, date) else query_date
+        response = await self.energy_usage_costs(
+            variables={
+                "accountNumber": account_number,
+                "date": date_str,
+                "companyCode": company_code,
+            },
+            headers=headers,
+            timeout=timeout,
+        )
+        return extract_energy_usage_costs(response)
+
+    async def get_energy_usages(
+        self,
+        account_number: str,
+        from_month: int,
+        first: int = 12,
+        *,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> list[EnergyUsage]:
+        """Get historical energy usages with typed response.
+
+        Args:
+            account_number: The billing account number
+            from_month: Start month in YYYYMM format (e.g., 202401)
+            first: Number of records to fetch (default 12)
+            headers: Additional headers to include
+            timeout: Request timeout in seconds
+
+        Returns:
+            List of energy usages
+
+        Raises:
+            GraphQLError: When the GraphQL request fails
+            DataExtractionError: When the expected data path is missing
+            ValueError: When the response contains GraphQL errors
+        """
+        response = await self.energy_usages(
+            variables={
+                "accountNumber": account_number,
+                "from": from_month,
+                "first": first,
+            },
+            headers=headers,
+            timeout=timeout,
+        )
+        return extract_energy_usages(response)
