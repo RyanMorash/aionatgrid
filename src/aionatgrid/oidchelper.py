@@ -1,11 +1,13 @@
 """OIDC Login Helper and its constituent functions."""
 
+import asyncio
 import base64
 import hashlib
 import json
 import logging
 import re
 import secrets
+import ssl
 from typing import Any, TypedDict
 from urllib.parse import parse_qs, urlparse
 
@@ -14,6 +16,7 @@ import jwt
 from jwt import PyJWKClient
 
 from .exceptions import CannotConnectError, InvalidAuthError
+from .helpers import create_cookie_jar
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,20 +39,37 @@ async def async_auth_oidc(
 ) -> tuple[str, int] | tuple[None, None]:
     """Perform the login process and return an access token with expiry time.
 
+    Note: This function creates its own dedicated session for OIDC authentication
+    with proper SSL and cookie handling. The passed session parameter is ignored
+    but kept for API compatibility.
+
     Args:
+        session: Ignored - kept for API compatibility
         timeout: Request timeout in seconds for authentication requests (default: 30.0)
 
     Returns:
         Tuple of (access_token, expires_in_seconds) on success, (None, None) on failure.
     """
+    # Create a dedicated session for OIDC with proper SSL and cookie handling
+    # Azure AD B2C requires specific cookie handling (quote_cookie=False)
+    ssl_context = await asyncio.get_running_loop().run_in_executor(
+        None, ssl.create_default_context
+    )
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    secure_session = aiohttp.ClientSession(
+        connector=connector, cookie_jar=create_cookie_jar()
+    )
+
     try:
         code_verifier = _generate_code_verifier()
         code_challenge = _generate_code_challenge(code_verifier)
         _LOGGER.debug("Generated PKCE code verifier and challenge")
-        config = await _get_config(session, base_url, tenant_id, policy, timeout=timeout)
+        config = await _get_config(
+            secure_session, base_url, tenant_id, policy, timeout=timeout
+        )
         _LOGGER.debug("Retrieved OAuth configuration")
         auth_code, sub_value = await _get_auth(
-            session,
+            secure_session,
             config,
             code_challenge,
             username,
@@ -70,7 +90,7 @@ async def async_auth_oidc(
         _LOGGER.debug("Obtained authorization code")
 
         tokens = await _get_access(
-            session,
+            secure_session,
             config,
             auth_code,
             code_verifier,
@@ -84,13 +104,24 @@ async def async_auth_oidc(
             _LOGGER.debug("Successfully obtained access token")
             # Default to 3600 seconds (1 hour) if not provided
             expires_in = tokens.get("expires_in", 3600)
-            return tokens["access_token"], expires_in
+            access_token = tokens["access_token"]
+
+            # Extract sub claim from access token if login_data provided
+            if login_data is not None and not login_data.get("sub"):
+                sub_value = _extract_sub_from_token(access_token)
+                if sub_value:
+                    login_data["sub"] = sub_value
+                    _LOGGER.debug("Extracted sub from access token: %s", sub_value)
+
+            return access_token, expires_in
         _LOGGER.error("Failed to obtain access token")
         raise CannotConnectError("Failed to obtain access token")
 
     except aiohttp.ClientError as err:
         _LOGGER.exception("Connection error during login")
         raise CannotConnectError(f"Connection error: {err}") from err
+    finally:
+        await secure_session.close()
 
 
 class ConfigDict(TypedDict):
@@ -118,6 +149,24 @@ def _generate_code_challenge(code_verifier: str) -> str:
     """Generate a code challenge for PKCE."""
     code_challenge_digest = hashlib.sha256(code_verifier.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(code_challenge_digest).decode("utf-8").rstrip("=")
+
+
+def _extract_sub_from_token(token: str) -> str | None:
+    """Extract sub claim from a JWT token without signature verification.
+
+    This is safe because we trust the token came from a legitimate source
+    (our own OAuth flow) and we only need to read the claims.
+    """
+    try:
+        # Decode without verification - we just need to read the claims
+        claims = jwt.decode(token, options={"verify_signature": False})
+        sub = claims.get("sub")
+        if sub:
+            return str(sub)
+        return None
+    except jwt.InvalidTokenError as e:
+        _LOGGER.warning("Failed to decode token for sub extraction: %s", e)
+        return None
 
 
 async def _get_config(
@@ -151,9 +200,7 @@ async def _get_auth(
     """Get the authorization code."""
     auth_params = {
         "client_id": client_id,
-        "response_type": "code id_token",
-        "response_mode": "query",
-        "nonce": secrets.token_urlsafe(16),
+        "response_type": "code",
         "redirect_uri": redirect_uri,
         "scope": scope_auth,
         "code_challenge": code_challenge,
@@ -278,6 +325,58 @@ def _extract_settings(auth_content: str) -> dict[str, Any] | None:
     return None
 
 
+def _check_b2c_error_response(content: str) -> tuple[str, str] | None:
+    """Check if a B2C response contains an error.
+
+    Azure AD B2C sometimes returns HTTP 200 with an HTML error page instead of
+    a proper error status code. This function detects such responses.
+
+    Args:
+        content: The response body text
+
+    Returns:
+        Tuple of (error_type, error_detail) if an error is detected, None otherwise.
+    """
+    # Check for GLOBALEX error object (indicates B2C exception)
+    globalex_match = re.search(r'var GLOBALEX\s*=\s*\{([^}]+)\}', content)
+    if globalex_match:
+        try:
+            # Parse the GLOBALEX object
+            globalex_text = "{" + globalex_match.group(1) + "}"
+            globalex = json.loads(globalex_text)
+            detail = globalex.get("Detail", "Unknown error")
+            correlation_id = globalex.get("CorrelationId", "")
+            _LOGGER.debug("B2C error detected. CorrelationId: %s", correlation_id)
+            return ("B2C_EXCEPTION", detail)
+        except json.JSONDecodeError:
+            pass
+
+    # Check for specific error indicators in SETTINGS
+    settings_match = re.search(r'"api"\s*:\s*"GlobalException"', content)
+    if settings_match:
+        # Try to extract error message from CONTENT object
+        content_match = re.search(r'"error-title"\s*:\s*"([^"]+)"', content)
+        error_title = content_match.group(1) if content_match else "Authentication error"
+        # Unescape HTML entities
+        error_title = error_title.replace("&#39;", "'").replace("&quot;", '"')
+        return ("GLOBAL_EXCEPTION", error_title)
+
+    # Check for common B2C error codes
+    error_code_match = re.search(r'(AADB2C\d+)[:\s]+([^<"\n]+)', content)
+    if error_code_match:
+        return (error_code_match.group(1), error_code_match.group(2).strip())
+
+    # Check for password-specific errors
+    if "Your password is incorrect" in content:
+        return ("INVALID_PASSWORD", "Your password is incorrect")
+    if "We can't find an account" in content or "account with that email" in content:
+        return ("ACCOUNT_NOT_FOUND", "Account not found with that email address")
+    if "account is locked" in content.lower():
+        return ("ACCOUNT_LOCKED", "Account is locked")
+
+    return None
+
+
 async def _post_credentials(
     session: aiohttp.ClientSession,
     issuer: str,
@@ -291,7 +390,7 @@ async def _post_credentials(
     """Post credentials to the server."""
     base_url = issuer.rsplit("/", 2)[0]
     _LOGGER.debug("Posting credentials to %s", base_url)
-    _, _, status = await _fetch(
+    response_content, _, status = await _fetch(
         session,
         f"{base_url}/{policy}/{self_asserted_endpoint}",
         timeout,
@@ -308,6 +407,19 @@ async def _post_credentials(
     if status != 200:
         _LOGGER.error("Failed to post credentials. Status: %s", status)
         raise InvalidAuthError("Invalid username or password")
+
+    # Check response body for B2C errors (B2C returns 200 even on auth failures)
+    if response_content:
+        error_info = _check_b2c_error_response(response_content)
+        if error_info:
+            error_type, error_detail = error_info
+            _LOGGER.error(
+                "B2C authentication error: %s - %s", error_type, error_detail
+            )
+            if "password" in error_detail.lower() or "credential" in error_detail.lower():
+                raise InvalidAuthError(f"Invalid username or password: {error_detail}")
+            raise CannotConnectError(f"Authentication failed: {error_detail}")
+
     _LOGGER.debug("Credentials posted successfully")
 
 

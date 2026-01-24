@@ -506,12 +506,17 @@ class NationalGridClient:
             sub_value = self._login_data.get("sub")
             if sub_value:
                 variables = {"userId": sub_value}
-        request = linked_billing_accounts_request(
-            selection_set=selection_set,
-            variables=variables,
-            variable_definitions=variable_definitions,
-            field_arguments=field_arguments,
-        )
+        # Only pass variable_definitions and field_arguments if explicitly set
+        # to avoid overriding the defaults in linked_billing_accounts_request
+        kwargs: dict[str, Any] = {
+            "selection_set": selection_set,
+            "variables": variables,
+        }
+        if variable_definitions is not None:
+            kwargs["variable_definitions"] = variable_definitions
+        if field_arguments is not None:
+            kwargs["field_arguments"] = field_arguments
+        request = linked_billing_accounts_request(**kwargs)
         return await self.execute(request, headers=headers, timeout=timeout)
 
     async def billing_account_info(
