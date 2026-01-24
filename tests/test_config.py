@@ -9,32 +9,31 @@ def test_from_env_reads_expected_values(monkeypatch: pytest.MonkeyPatch) -> None
     endpoint = "https://example.test/graphql"
     username = "user@example.com"
     password = "super-secret"
-    subscription_key = "sub-key"
     monkeypatch.setenv("NATIONALGRID_GRAPHQL_ENDPOINT", endpoint)
     monkeypatch.setenv("NATIONALGRID_USERNAME", username)
     monkeypatch.setenv("NATIONALGRID_PASSWORD", password)
-    monkeypatch.setenv("NATIONALGRID_SUBSCRIPTION_KEY", subscription_key)
 
     config = NationalGridConfig.from_env()
 
     assert config.endpoint == endpoint
     assert config.username == username
     assert config.password == password
-    assert config.subscription_key == subscription_key
+    # subscription_key is a static shared key, not configurable
+    assert config.subscription_key == "e674f89d7ed9417194de894b701333dd"
 
 
 def test_from_env_uses_defaults_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("NATIONALGRID_GRAPHQL_ENDPOINT", raising=False)
     monkeypatch.delenv("NATIONALGRID_USERNAME", raising=False)
     monkeypatch.delenv("NATIONALGRID_PASSWORD", raising=False)
-    monkeypatch.delenv("NATIONALGRID_SUBSCRIPTION_KEY", raising=False)
 
     config = NationalGridConfig.from_env()
 
     assert config.endpoint == DEFAULT_ENDPOINT
     assert config.username is None
     assert config.password is None
-    assert config.subscription_key is None
+    # subscription_key is a static shared key, always present
+    assert config.subscription_key == "e674f89d7ed9417194de894b701333dd"
 
 
 def test_build_headers_merges_overrides(monkeypatch: pytest.MonkeyPatch) -> None:

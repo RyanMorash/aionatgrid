@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "aiohttp>=3.9",
     "typing-extensions>=4.7",
+    "PyJWT[crypto]>=2.8.0",
 ]
 
 dynamic = []

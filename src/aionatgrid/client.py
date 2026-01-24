@@ -14,8 +14,8 @@ from .auth import NationalGridAuth
 from .config import NationalGridConfig
 from .graphql import GraphQLRequest, GraphQLResponse
 from .queries import (
-    DEFAULT_SELECTION_SET,
     BILLING_ACCOUNT_INFO_SELECTION_SET,
+    DEFAULT_SELECTION_SET,
     LINKED_BILLING_SELECTION_SET,
     billing_account_info_request,
     energy_usage_request,
@@ -47,7 +47,7 @@ class NationalGridClient:
     def config(self) -> NationalGridConfig:
         return self._config
 
-    async def __aenter__(self) -> "NationalGridClient":
+    async def __aenter__(self) -> NationalGridClient:
         await self._ensure_session()
         return self
 

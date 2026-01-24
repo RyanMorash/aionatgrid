@@ -11,6 +11,8 @@ from typing import Any, TypedDict
 from urllib.parse import parse_qs, urlparse
 
 import aiohttp
+import jwt
+from jwt import PyJWKClient
 
 from .exceptions import CannotConnectError, InvalidAuthError
 from .helpers import create_cookie_jar
@@ -91,6 +93,7 @@ class ConfigDict(TypedDict):
     authorization_endpoint: str
     issuer: str
     token_endpoint: str
+    jwks_uri: str
 
 
 class TokenDict(TypedDict):
@@ -110,7 +113,9 @@ def _generate_code_challenge(code_verifier: str) -> str:
     return base64.urlsafe_b64encode(code_challenge_digest).decode("utf-8").rstrip("=")
 
 
-async def _get_config(session: aiohttp.ClientSession, base_url: str, tenant_id: str, policy: str) -> ConfigDict:
+async def _get_config(
+    session: aiohttp.ClientSession, base_url: str, tenant_id: str, policy: str
+) -> ConfigDict:
     """Get the configuration from the server."""
     config_url = f"{base_url}/{tenant_id}/{policy}/v2.0/.well-known/openid-configuration"
     _LOGGER.debug("Fetching OAuth configuration from: %s", config_url)
@@ -147,7 +152,9 @@ async def _get_auth(
         "code_challenge_method": "S256",
     }
     _LOGGER.debug("Requesting authorization code")
-    auth_content, final_url, status = await _fetch(session, config["authorization_endpoint"], params=auth_params)
+    auth_content, final_url, status = await _fetch(
+        session, config["authorization_endpoint"], params=auth_params
+    )
     if status != 200 or not auth_content:
         _LOGGER.error("Failed to get authorization. Status: %s", status)
         raise CannotConnectError("Failed to get authorization")
@@ -155,7 +162,7 @@ async def _get_auth(
     settings = _extract_settings(auth_content)
     if not settings:
         _LOGGER.debug("No settings extracted, checking for direct authorization code")
-        return _extract_auth_result(final_url, redirect_uri)
+        return _extract_auth_result(final_url, redirect_uri, config, client_id)
 
     _LOGGER.debug("Posting credentials")
     await _post_credentials(
@@ -168,7 +175,16 @@ async def _get_auth(
         self_asserted_endpoint,
     )
     _LOGGER.debug("Confirming sign-in")
-    return await _confirm_signin(session, config["issuer"], settings, policy, policy_confirm_endpoint, redirect_uri)
+    return await _confirm_signin(
+        session,
+        config["issuer"],
+        settings,
+        policy,
+        policy_confirm_endpoint,
+        redirect_uri,
+        config,
+        client_id,
+    )
 
 
 async def _get_access(
@@ -190,7 +206,9 @@ async def _get_access(
         "scope": scope_access,
     }
     _LOGGER.debug("Requesting access token")
-    token_content, _, status = await _fetch(session, config["token_endpoint"], method="POST", data=token_data)
+    token_content, _, status = await _fetch(
+        session, config["token_endpoint"], method="POST", data=token_data
+    )
     if status != 200 or not token_content:
         _LOGGER.error("Failed to get access token. Status: %s", status)
         raise CannotConnectError("Failed to get access token")
@@ -198,7 +216,9 @@ async def _get_access(
     return tokens
 
 
-async def _fetch(session: aiohttp.ClientSession, url: str, **kwargs: Any) -> tuple[str | None, str | None, int]:
+async def _fetch(
+    session: aiohttp.ClientSession, url: str, **kwargs: Any
+) -> tuple[str | None, str | None, int]:
     """Fetch data from a URL."""
     method = kwargs.pop("method", "GET")
     timeout = aiohttp.ClientTimeout(total=30)
@@ -273,6 +293,8 @@ async def _confirm_signin(
     policy: str,
     policy_confirm_endpoint: str,
     redirect_uri: str,
+    config: ConfigDict,
+    client_id: str,
 ) -> tuple[str | None, str | None]:
     """Confirm the sign-in process."""
     base_url = issuer.rsplit("/", 2)[0]
@@ -294,7 +316,7 @@ async def _confirm_signin(
             raise InvalidAuthError("Invalid username or password")
         raise CannotConnectError("Failed to confirm signin")
     if final_url:
-        auth_code, sub_value = _extract_auth_result(final_url, redirect_uri)
+        auth_code, sub_value = _extract_auth_result(final_url, redirect_uri, config, client_id)
         if auth_code:
             _LOGGER.debug("Sign-in confirmed, authorization code obtained")
         else:
@@ -312,13 +334,15 @@ async def _confirm_signin(
     return None, None
 
 
-def _extract_auth_result(final_url: str | None, redirect_uri: str) -> tuple[str | None, str | None]:
+def _extract_auth_result(
+    final_url: str | None, redirect_uri: str, config: ConfigDict, client_id: str
+) -> tuple[str | None, str | None]:
     if not final_url or not final_url.startswith(redirect_uri):
         return None, None
     parsed_params = _parse_redirect_params(final_url)
     auth_code = parsed_params.get("code", [None])[0]
     id_token = parsed_params.get("id_token", [None])[0]
-    sub_value = _extract_sub_from_id_token(id_token) if id_token else None
+    sub_value = _extract_sub_from_id_token(id_token, config, client_id) if id_token else None
     return auth_code, sub_value
 
 
@@ -331,24 +355,48 @@ def _parse_redirect_params(final_url: str) -> dict[str, list[str]]:
     return parse_qs(query)
 
 
-def _extract_sub_from_id_token(id_token: str | None) -> str | None:
+def _extract_sub_from_id_token(
+    id_token: str | None, config: ConfigDict, client_id: str
+) -> str | None:
+    """Extract and verify the sub claim from an id_token with proper signature validation."""
     if not id_token:
         return None
-    parts = id_token.split(".")
-    if len(parts) < 2:
-        _LOGGER.warning("Invalid id_token format")
-        return None
-    payload = parts[1]
-    padded = payload + "=" * (-len(payload) % 4)
+
     try:
-        decoded = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
-        claims = json.loads(decoded)
-    except (ValueError, json.JSONDecodeError):
-        _LOGGER.exception("Failed to decode id_token payload")
+        # Use PyJWKClient to fetch and cache the signing keys from the JWKS endpoint
+        jwks_client = PyJWKClient(config["jwks_uri"])
+        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+
+        # Verify the token signature and validate claims
+        claims = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            issuer=config["issuer"],
+            audience=client_id,
+            options={
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_iat": True,
+                "verify_iss": True,
+                "verify_aud": True,
+            },
+        )
+
+        sub_value = claims.get("sub")
+        if sub_value:
+            _LOGGER.debug("Extracted and verified sub from id_token")
+            return str(sub_value)
+        else:
+            _LOGGER.warning("sub claim not found in verified id_token")
+            return None
+
+    except jwt.ExpiredSignatureError:
+        _LOGGER.error("id_token has expired")
         return None
-    sub_value = claims.get("sub")
-    if sub_value:
-        _LOGGER.debug("Extracted sub from id_token")
-    else:
-        _LOGGER.debug("sub claim not found in id_token")
-    return sub_value
+    except jwt.InvalidTokenError as e:
+        _LOGGER.error("id_token validation failed: %s", e)
+        return None
+    except Exception as e:
+        _LOGGER.exception("Unexpected error validating id_token: %s", e)
+        return None

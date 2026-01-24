@@ -14,7 +14,7 @@ class _DummyResponse:
     def __init__(self, payload: dict[str, object]):
         self._payload = payload
 
-    async def __aenter__(self) -> "_DummyResponse":
+    async def __aenter__(self) -> _DummyResponse:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> bool:  # type: ignore[override]
@@ -33,7 +33,7 @@ class _DummyRestResponse:
         self.headers = {"Content-Type": content_type}
         self.status = 200
 
-    async def __aenter__(self) -> "_DummyRestResponse":
+    async def __aenter__(self) -> _DummyRestResponse:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> bool:  # type: ignore[override]
@@ -98,7 +98,9 @@ async def test_execute_merges_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     session.closed = False
     session.post.return_value = _DummyResponse({"data": {}})
 
-    async def _fake_login(self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict) -> str:
+    async def _fake_login(
+        self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
+    ) -> str:
         assert username == "user@example.com"
         assert password == "super-secret"
         return "token"
@@ -133,7 +135,9 @@ async def test_request_rest_uses_base_url(monkeypatch: pytest.MonkeyPatch) -> No
     session.closed = False
     session.request.return_value = _DummyRestResponse({"value": 42})
 
-    async def _fake_login(self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict) -> str:
+    async def _fake_login(
+        self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
+    ) -> str:
         return "rest-token"
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
@@ -162,7 +166,9 @@ async def test_execute_uses_oidc_token(monkeypatch: pytest.MonkeyPatch) -> None:
     session.closed = False
     session.post.return_value = _DummyResponse({"data": {}})
 
-    async def _fake_login(self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict) -> str:
+    async def _fake_login(
+        self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
+    ) -> str:
         assert username == "user@example.com"
         assert password == "super-secret"
         return "oidc-token"
