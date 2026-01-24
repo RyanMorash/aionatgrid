@@ -51,6 +51,17 @@ meter {
     }
 }
 """
+ENERGY_USAGE_COSTS_SELECTION_SET = """
+date
+fuelType
+amount
+month
+"""
+ENERGY_USAGES_SELECTION_SET = """
+usage
+usageType
+usageYearMonth
+"""
 
 
 @dataclass(slots=True)
@@ -136,22 +147,59 @@ def billing_account_info_request(
     ).to_request()
 
 
-def energy_usage_request(
+def energy_usage_costs_request(
     *,
-    selection_set: str = DEFAULT_SELECTION_SET,
+    selection_set: str = ENERGY_USAGE_COSTS_SELECTION_SET,
     variables: Mapping[str, Any] | None = None,
-    variable_definitions: str | Sequence[str] | None = None,
-    field_arguments: str | None = None,
-    operation_name: str = "EnergyUsage",
+    variable_definitions: str | Sequence[str] | None = (
+        "$accountNumber: String!",
+        "$date: Date!",
+        "$companyCode: CompanyCodeValue!",
+    ),
+    field_arguments: str | None = (
+        "accountNumber: $accountNumber, date: $date, companyCode: $companyCode"
+    ),
+    operation_name: str = "EnergyUsageCosts",
 ) -> GraphQLRequest:
-    """Scaffold an energy usage query.
+    """Scaffold an energy usage costs query.
 
     This request targets the energyusage-cu-uwp-gql GraphQL endpoint.
     """
-
     return StandardQuery(
         operation_name=operation_name,
-        root_field="energyUsage",
+        root_field="energyUsageCosts",
+        selection_set=selection_set,
+        variables=variables,
+        variable_definitions=variable_definitions,
+        field_arguments=field_arguments,
+        endpoint=ENERGY_USAGE_ENDPOINT,
+    ).to_request()
+
+
+def energy_usages_request(
+    *,
+    selection_set: str = ENERGY_USAGES_SELECTION_SET,
+    variables: Mapping[str, Any] | None = None,
+    variable_definitions: str | Sequence[str] | None = (
+        "$accountNumber: String!",
+        "$from: Int!",
+        "$first: Int!",
+    ),
+    field_arguments: str | None = (
+        "accountNumber: $accountNumber, "
+        "where: {usageYearMonth: {gte: $from}}, "
+        "order: [{usageYearMonth: DESC}], "
+        "first: $first"
+    ),
+    operation_name: str = "EnergyUsages",
+) -> GraphQLRequest:
+    """Scaffold an energy usages query.
+
+    This request targets the energyusage-cu-uwp-gql GraphQL endpoint.
+    """
+    return StandardQuery(
+        operation_name=operation_name,
+        root_field="energyUsages",
         selection_set=selection_set,
         variables=variables,
         variable_definitions=variable_definitions,

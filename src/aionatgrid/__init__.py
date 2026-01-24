@@ -13,9 +13,12 @@ from .exceptions import (
 from .graphql import GraphQLRequest, GraphQLResponse
 from .queries import (
     DEFAULT_SELECTION_SET,
+    ENERGY_USAGE_COSTS_SELECTION_SET,
+    ENERGY_USAGES_SELECTION_SET,
     StandardQuery,
     billing_account_info_request,
-    energy_usage_request,
+    energy_usage_costs_request,
+    energy_usages_request,
     linked_billing_accounts_request,
 )
 from .rest import RestRequest, RestResponse
@@ -28,11 +31,14 @@ __all__ = [
     "GraphQLRequest",
     "GraphQLResponse",
     "DEFAULT_SELECTION_SET",
+    "ENERGY_USAGE_COSTS_SELECTION_SET",
+    "ENERGY_USAGES_SELECTION_SET",
     "RestRequest",
     "RestResponse",
     "StandardQuery",
     "billing_account_info_request",
-    "energy_usage_request",
+    "energy_usage_costs_request",
+    "energy_usages_request",
     "linked_billing_accounts_request",
     "RealtimeMeterInfo",
     "realtime_meter_info_request",

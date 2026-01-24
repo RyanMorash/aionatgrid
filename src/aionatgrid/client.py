@@ -18,10 +18,12 @@ from .exceptions import GraphQLError, RestAPIError, RetryExhaustedError
 from .graphql import GraphQLRequest, GraphQLResponse
 from .queries import (
     BILLING_ACCOUNT_INFO_SELECTION_SET,
-    DEFAULT_SELECTION_SET,
+    ENERGY_USAGE_COSTS_SELECTION_SET,
+    ENERGY_USAGES_SELECTION_SET,
     LINKED_BILLING_SELECTION_SET,
     billing_account_info_request,
-    energy_usage_request,
+    energy_usage_costs_request,
+    energy_usages_request,
     linked_billing_accounts_request,
 )
 from .rest import RestResponse
@@ -543,24 +545,48 @@ class NationalGridClient:
         request = billing_account_info_request(**kwargs)
         return await self.execute(request, headers=headers, timeout=timeout)
 
-    async def energy_usage(
+    async def energy_usage_costs(
         self,
         *,
-        selection_set: str = DEFAULT_SELECTION_SET,
+        selection_set: str = ENERGY_USAGE_COSTS_SELECTION_SET,
         variables: Mapping[str, Any] | None = None,
         variable_definitions: str | Sequence[str] | None = None,
         field_arguments: str | None = None,
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
     ) -> GraphQLResponse:
-        """Execute the energy usage scaffold query."""
+        """Execute the energy usage costs query."""
+        kwargs: dict[str, Any] = {
+            "selection_set": selection_set,
+            "variables": variables,
+        }
+        if variable_definitions is not None:
+            kwargs["variable_definitions"] = variable_definitions
+        if field_arguments is not None:
+            kwargs["field_arguments"] = field_arguments
+        request = energy_usage_costs_request(**kwargs)
+        return await self.execute(request, headers=headers, timeout=timeout)
 
-        request = energy_usage_request(
-            selection_set=selection_set,
-            variables=variables,
-            variable_definitions=variable_definitions,
-            field_arguments=field_arguments,
-        )
+    async def energy_usages(
+        self,
+        *,
+        selection_set: str = ENERGY_USAGES_SELECTION_SET,
+        variables: Mapping[str, Any] | None = None,
+        variable_definitions: str | Sequence[str] | None = None,
+        field_arguments: str | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> GraphQLResponse:
+        """Execute the energy usages query."""
+        kwargs: dict[str, Any] = {
+            "selection_set": selection_set,
+            "variables": variables,
+        }
+        if variable_definitions is not None:
+            kwargs["variable_definitions"] = variable_definitions
+        if field_arguments is not None:
+            kwargs["field_arguments"] = field_arguments
+        request = energy_usages_request(**kwargs)
         return await self.execute(request, headers=headers, timeout=timeout)
 
     async def realtime_meter_info(
