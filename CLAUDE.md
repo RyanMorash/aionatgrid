@@ -9,6 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync                    # Install dependencies (creates .venv)
 ```
 
+**Note**: This project uses a virtual environment at `.venv/`. If `uv` is not available in PATH, run tools directly from the venv:
+```bash
+.venv/bin/pytest           # Run tests
+.venv/bin/ruff check .     # Lint code
+.venv/bin/mypy src         # Type-check
+```
+
 ### Testing and Quality
 ```bash
 uv run pytest              # Run all tests
