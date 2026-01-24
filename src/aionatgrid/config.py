@@ -36,6 +36,10 @@ class NationalGridConfig:
     timeout: float = DEFAULT_TIMEOUT
     verify_ssl: bool = True
     retry_config: RetryConfig = field(default_factory=RetryConfig)
+    # Connection pool settings
+    connection_limit: int = 100  # Total connection pool size
+    connection_limit_per_host: int = 30  # Connections per individual host
+    dns_cache_ttl: int = 300  # DNS cache TTL in seconds
 
     @classmethod
     def from_env(

@@ -35,8 +35,12 @@ class NationalGridAuth:
         username: str,
         password: str,
         login_data: dict[str, Any],
+        timeout: float = 30.0,
     ) -> tuple[str, int] | tuple[None, None]:
         """Perform the login process and return an access token with expiry.
+
+        Args:
+            timeout: Request timeout in seconds for authentication requests (default: 30.0)
 
         Returns:
             Tuple of (access_token, expires_in_seconds) on success, (None, None) on failure.
@@ -56,4 +60,5 @@ class NationalGridAuth:
             NationalGridAuth.SELF_ASSERTED_ENDPOINT,
             NationalGridAuth.POLICY_CONFIRM_ENDPOINT,
             login_data,
+            timeout,
         )

@@ -32,8 +32,12 @@ async def async_auth_oidc(
     self_asserted_endpoint: str,
     policy_confirm_endpoint: str,
     login_data: dict[str, Any] | None = None,
+    timeout: float = 30.0,
 ) -> tuple[str, int] | tuple[None, None]:
     """Perform the login process and return an access token with expiry time.
+
+    Args:
+        timeout: Request timeout in seconds for authentication requests (default: 30.0)
 
     Returns:
         Tuple of (access_token, expires_in_seconds) on success, (None, None) on failure.
@@ -42,7 +46,7 @@ async def async_auth_oidc(
         code_verifier = _generate_code_verifier()
         code_challenge = _generate_code_challenge(code_verifier)
         _LOGGER.debug("Generated PKCE code verifier and challenge")
-        config = await _get_config(session, base_url, tenant_id, policy)
+        config = await _get_config(session, base_url, tenant_id, policy, timeout=timeout)
         _LOGGER.debug("Retrieved OAuth configuration")
         auth_code, sub_value = await _get_auth(
             session,
@@ -56,6 +60,7 @@ async def async_auth_oidc(
             policy,
             self_asserted_endpoint,
             policy_confirm_endpoint,
+            timeout,
         )
         if sub_value and login_data is not None:
             login_data["sub"] = sub_value
@@ -72,6 +77,7 @@ async def async_auth_oidc(
             client_id,
             redirect_uri,
             scope_access,
+            timeout,
         )
 
         if tokens and "access_token" in tokens:
@@ -115,12 +121,12 @@ def _generate_code_challenge(code_verifier: str) -> str:
 
 
 async def _get_config(
-    session: aiohttp.ClientSession, base_url: str, tenant_id: str, policy: str
+    session: aiohttp.ClientSession, base_url: str, tenant_id: str, policy: str, timeout: float
 ) -> ConfigDict:
     """Get the configuration from the server."""
     config_url = f"{base_url}/{tenant_id}/{policy}/v2.0/.well-known/openid-configuration"
     _LOGGER.debug("Fetching OAuth configuration from: %s", config_url)
-    config_text, _, status = await _fetch(session, config_url)
+    config_text, _, status = await _fetch(session, config_url, timeout)
     if status != 200 or not config_text:
         _LOGGER.error("Failed to get configuration. Status: %s", status)
         raise CannotConnectError("Failed to get configuration")
@@ -140,6 +146,7 @@ async def _get_auth(
     policy: str,
     self_asserted_endpoint: str,
     policy_confirm_endpoint: str,
+    timeout: float,
 ) -> tuple[str | None, str | None]:
     """Get the authorization code."""
     auth_params = {
@@ -154,7 +161,7 @@ async def _get_auth(
     }
     _LOGGER.debug("Requesting authorization code")
     auth_content, final_url, status = await _fetch(
-        session, config["authorization_endpoint"], params=auth_params
+        session, config["authorization_endpoint"], timeout, params=auth_params
     )
     if status != 200 or not auth_content:
         _LOGGER.error("Failed to get authorization. Status: %s", status)
@@ -174,6 +181,7 @@ async def _get_auth(
         password,
         policy,
         self_asserted_endpoint,
+        timeout,
     )
     _LOGGER.debug("Confirming sign-in")
     return await _confirm_signin(
@@ -185,6 +193,7 @@ async def _get_auth(
         redirect_uri,
         config,
         client_id,
+        timeout,
     )
 
 
@@ -196,6 +205,7 @@ async def _get_access(
     client_id: str,
     redirect_uri: str,
     scope_access: str,
+    timeout: float,
 ) -> TokenDict | None:
     """Get the access token."""
     token_data = {
@@ -208,7 +218,7 @@ async def _get_access(
     }
     _LOGGER.debug("Requesting access token")
     token_content, _, status = await _fetch(
-        session, config["token_endpoint"], method="POST", data=token_data
+        session, config["token_endpoint"], timeout, method="POST", data=token_data
     )
     if status != 200 or not token_content:
         _LOGGER.error("Failed to get access token. Status: %s", status)
@@ -218,14 +228,14 @@ async def _get_access(
 
 
 async def _fetch(
-    session: aiohttp.ClientSession, url: str, **kwargs: Any
+    session: aiohttp.ClientSession, url: str, timeout: float, **kwargs: Any
 ) -> tuple[str | None, str | None, int]:
     """Fetch data from a URL."""
     method = kwargs.pop("method", "GET")
-    timeout = aiohttp.ClientTimeout(total=30)
+    timeout_obj = aiohttp.ClientTimeout(total=timeout)
     try:
         _LOGGER.debug("Fetching URL: %s, Method: %s", url, method)
-        async with session.request(method, url, timeout=timeout, **kwargs) as response:
+        async with session.request(method, url, timeout=timeout_obj, **kwargs) as response:
             content = await response.text()
             _LOGGER.debug("Fetch completed. Status: %s", response.status)
             return content, str(response.url), response.status
@@ -276,6 +286,7 @@ async def _post_credentials(
     password: str,
     policy: str,
     self_asserted_endpoint: str,
+    timeout: float,
 ) -> None:
     """Post credentials to the server."""
     base_url = issuer.rsplit("/", 2)[0]
@@ -283,6 +294,7 @@ async def _post_credentials(
     _, _, status = await _fetch(
         session,
         f"{base_url}/{policy}/{self_asserted_endpoint}",
+        timeout,
         method="POST",
         data={
             "tx": settings["transId"],
@@ -308,6 +320,7 @@ async def _confirm_signin(
     redirect_uri: str,
     config: ConfigDict,
     client_id: str,
+    timeout: float,
 ) -> tuple[str | None, str | None]:
     """Confirm the sign-in process."""
     base_url = issuer.rsplit("/", 2)[0]
@@ -315,6 +328,7 @@ async def _confirm_signin(
     _, final_url, status = await _fetch(
         session,
         f"{base_url}/{policy}/{policy_confirm_endpoint}",
+        timeout,
         params={
             "rememberMe": "false",
             "csrf_token": settings["csrf"],

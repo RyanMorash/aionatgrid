@@ -433,6 +433,7 @@ class NationalGridClient:
                 self._config.username,
                 self._config.password,
                 self._login_data,
+                timeout=self._config.timeout,
             )
             if token and expires_in:
                 self._access_token = token
@@ -469,7 +470,16 @@ class NationalGridClient:
                 return self._session
 
             timeout = aiohttp.ClientTimeout(total=self._config.timeout)
-            self._session = aiohttp.ClientSession(timeout=timeout)
+            # Create connector with configured limits
+            connector = aiohttp.TCPConnector(
+                limit=self._config.connection_limit,
+                limit_per_host=self._config.connection_limit_per_host,
+                ttl_dns_cache=self._config.dns_cache_ttl,
+            )
+            self._session = aiohttp.ClientSession(
+                timeout=timeout,
+                connector=connector,
+            )
             return self._session
 
     async def ping(self) -> bool:

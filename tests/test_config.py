@@ -47,3 +47,23 @@ def test_build_headers_merges_overrides(monkeypatch: pytest.MonkeyPatch) -> None
     assert headers["X-Test"] == "1"
     assert headers["Another"] == "2"
     assert headers["Content-Type"] == "application/json"
+
+
+def test_connection_pool_defaults() -> None:
+    """Verify default connection pool settings."""
+    config = NationalGridConfig()
+    assert config.connection_limit == 100
+    assert config.connection_limit_per_host == 30
+    assert config.dns_cache_ttl == 300
+
+
+def test_connection_pool_overrides() -> None:
+    """Verify custom connection pool configuration."""
+    config = NationalGridConfig(
+        connection_limit=50,
+        connection_limit_per_host=10,
+        dns_cache_ttl=600,
+    )
+    assert config.connection_limit == 50
+    assert config.connection_limit_per_host == 10
+    assert config.dns_cache_ttl == 600

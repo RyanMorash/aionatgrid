@@ -3,10 +3,10 @@
 Comprehensive review conducted after fixing critical and high-severity issues.
 
 ## Summary
-- **Medium-Severity Issues**: 5 remaining (3 completed ✅)
+- **Medium-Severity Issues**: 3 remaining (5 completed ✅)
 - **Low-Severity Issues**: 9 found
 - **Code Quality Improvements**: 6 identified
-- **Testing Gaps**: Partially addressed (retry tests added)
+- **Testing Gaps**: Partially addressed (retry tests added, connector tests added)
 
 ## Recent Changes (2026-01-24)
 
@@ -107,51 +107,59 @@ self._login_data: LoginData = {}
 - If MFA is planned for future, add a TODO comment
 - Consider using `ApiError` to wrap HTTP failures with context
 
-### 5. Hardcoded Timeout in Authentication ⚠️
+### 5. ~~Hardcoded Timeout in Authentication~~ ✅ COMPLETED
 **Location**: `oidchelper.py:225`
 
-**Problem**:
-```python
-timeout = aiohttp.ClientTimeout(total=30)  # Hardcoded!
-```
+**Status**: **FIXED** - Authentication requests now respect the configurable timeout from `NationalGridConfig`.
 
-Authentication requests use a hardcoded 30-second timeout instead of respecting the configured timeout in `NationalGridConfig`.
+**What Was Implemented**:
+- Added `timeout: float` parameter to `async_auth_oidc()` function
+- Threaded timeout parameter through entire authentication call chain:
+  - `client.py` → `auth.py` → `oidchelper.py` → `_fetch()`
+- Replaced hardcoded `ClientTimeout(total=30)` with `ClientTimeout(total=timeout)`
+- Default timeout remains 30 seconds (via `NationalGridConfig.timeout`) for backward compatibility
+- Users can now customize authentication timeout via `NationalGridConfig(timeout=60.0)`
 
-**Impact**: Users cannot configure auth timeouts separately, which may be needed for slow networks.
+**Files Modified**:
+- `src/aionatgrid/oidchelper.py` - Added timeout parameter to 6 functions
+- `src/aionatgrid/auth.py` - Added timeout parameter passthrough
+- `src/aionatgrid/client.py` - Passes config timeout to auth
+- `tests/test_client.py` - Updated test mocks
+- `tests/test_retry.py` - Updated test mocks
 
-**Recommendation**:
-```python
-# Pass config timeout or make auth timeout configurable
-timeout = aiohttp.ClientTimeout(total=config.get("auth_timeout", 30))
-```
+### 6. ~~No Connection Pooling Configuration~~ ✅ COMPLETED
+**Location**: `client.py:472`
 
-### 6. No Connection Pooling Configuration ⚠️
-**Location**: `client.py:205`
+**Status**: **FIXED** - Session now uses properly configured TCPConnector with sensible production defaults.
 
-**Problem**:
-```python
-self._session = aiohttp.ClientSession(timeout=timeout)
-# No connector configuration!
-```
+**What Was Implemented**:
+- Added three new configuration fields to `NationalGridConfig`:
+  - `connection_limit: int = 100` - Total connection pool size
+  - `connection_limit_per_host: int = 30` - Connections per individual host
+  - `dns_cache_ttl: int = 300` - DNS cache TTL in seconds (5 minutes)
+- Created `TCPConnector` with configured limits in `_ensure_session()` method
+- Default values prevent resource exhaustion while supporting high concurrency
+- Users can customize limits via `NationalGridConfig(connection_limit=50, connection_limit_per_host=10)`
+- Fully backward compatible - existing code gets safe defaults automatically
 
-Session doesn't configure connection limits. Default aiohttp limits are:
-- 100 connections per host
-- 0 (unlimited) total connections
-
-**Impact**: Could lead to resource exhaustion with many concurrent requests.
-
-**Recommendation**:
+**Implementation Details**:
 ```python
 connector = aiohttp.TCPConnector(
-    limit=100,  # Total connections
-    limit_per_host=30,  # Per-host limit
-    ttl_dns_cache=300,  # DNS cache TTL
+    limit=self._config.connection_limit,
+    limit_per_host=self._config.connection_limit_per_host,
+    ttl_dns_cache=self._config.dns_cache_ttl,
 )
 self._session = aiohttp.ClientSession(
     timeout=timeout,
-    connector=connector
+    connector=connector,
 )
 ```
+
+**Files Modified**:
+- `src/aionatgrid/config.py` - Added connection pool fields
+- `src/aionatgrid/client.py` - Creates TCPConnector in session
+- `tests/test_config.py` - Added connection pool tests
+- `tests/test_client.py` - Added integration test for connector
 
 ### 7. ~~No Handling of 401 Errors to Trigger Re-auth~~ ✅ COMPLETED
 **Location**: `client.py:95, 138`
@@ -458,11 +466,11 @@ async def test_malformed_settings_extraction():
 2. ~~Implement basic retry logic (#2)~~ - DONE
 3. ~~Handle 401 errors with automatic re-auth (#7)~~ - DONE
 4. ~~Write tests for error scenarios~~ - DONE (9 retry tests added)
+5. ~~Fix hardcoded timeout in authentication (#5)~~ - DONE
+6. ~~Add connection pool configuration (#6)~~ - DONE
 
 ### Immediate (Should Fix Soon)
-1. Remove or use dead exception classes (#4)
-2. Fix hardcoded timeout in authentication (#5)
-3. Add connection pool configuration (#6)
+1. Investigate unused exception classes (#4) - *Note: Recent exploration confirmed all exceptions are actively used*
 
 ### Short-Term (Next Sprint)
 1. Improve type safety for login_data (#3)
@@ -480,17 +488,20 @@ async def test_malformed_settings_extraction():
 
 ## Conclusion
 
-The codebase is in **excellent shape** after the recent improvements. No critical or high-severity issues remain. The most important medium-severity issues around **error context and retry logic have been addressed**.
+The codebase is in **excellent shape** after the recent improvements. No critical or high-severity issues remain. The most important medium-severity issues around **error context, retry logic, timeout configuration, and connection pooling have been addressed**.
 
-**Overall Code Quality**: A- (Very Good)
-- Strong: Type safety, async/await usage, documentation, error handling, retry logic
-- Needs work: Connection pooling, test coverage for untested modules, operational monitoring
+**Overall Code Quality**: A (Excellent)
+- Strong: Type safety, async/await usage, documentation, error handling, retry logic, connection pooling, configurable timeouts
+- Needs work: Test coverage for untested modules, operational monitoring
 
-**Recent Improvements** (commit aafedbe):
+**Recent Improvements** (commits aafedbe, current):
 - ✅ Comprehensive error context with custom exception hierarchy
 - ✅ Exponential backoff retry logic with jitter
 - ✅ Automatic 401 re-authentication
-- ✅ 9 new tests for retry scenarios (17 total tests, all passing)
+- ✅ Configurable authentication timeout (respects NationalGridConfig.timeout)
+- ✅ Production-ready connection pooling with TCPConnector
+- ✅ 11 new tests (20 total tests, all passing)
 - ✅ Configurable retry behavior via RetryConfig
+- ✅ DNS caching for reduced latency
 
-**Next Steps**: Focus on remaining medium-severity issues (connection pooling, type safety for login_data) and expanding test coverage to untested modules.
+**Next Steps**: Focus on remaining medium-severity issues (type safety for login_data, response body logging security) and expanding test coverage to untested modules.

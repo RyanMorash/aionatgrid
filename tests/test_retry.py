@@ -69,7 +69,7 @@ async def test_retry_on_500_error(monkeypatch: pytest.MonkeyPatch):
 
     session.post = mock_post
 
-    async def _fake_login(self, session, username, password, login_data):
+    async def _fake_login(self, session, username, password, login_data, timeout):
         return "token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
@@ -93,7 +93,7 @@ async def test_retry_exhausted_raises_error(monkeypatch: pytest.MonkeyPatch):
     # Always fail with 500
     session.post.return_value = _MockResponse({}, status=500, raise_on_status=True)
 
-    async def _fake_login(self, session, username, password, login_data):
+    async def _fake_login(self, session, username, password, login_data, timeout):
         return "token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
@@ -134,7 +134,7 @@ async def test_401_clears_token_and_retries(monkeypatch: pytest.MonkeyPatch):
 
     login_count = 0
 
-    async def _fake_login(self, session, username, password, login_data):
+    async def _fake_login(self, session, username, password, login_data, timeout):
         nonlocal login_count
         login_count += 1
         return f"token_{login_count}", 3600
@@ -163,7 +163,7 @@ async def test_graphql_error_includes_context(monkeypatch: pytest.MonkeyPatch):
 
     session.post = mock_post
 
-    async def _fake_login(self, session, username, password, login_data):
+    async def _fake_login(self, session, username, password, login_data, timeout):
         return "token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
@@ -202,7 +202,7 @@ async def test_rest_api_error_includes_context(monkeypatch: pytest.MonkeyPatch):
 
     session.request = mock_request
 
-    async def _fake_login(self, session, username, password, login_data):
+    async def _fake_login(self, session, username, password, login_data, timeout):
         return "token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
@@ -240,7 +240,7 @@ async def test_no_retry_on_400_error(monkeypatch: pytest.MonkeyPatch):
 
     session.post = mock_post
 
-    async def _fake_login(self, session, username, password, login_data):
+    async def _fake_login(self, session, username, password, login_data, timeout):
         return "token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
@@ -273,7 +273,7 @@ async def test_retry_on_timeout(monkeypatch: pytest.MonkeyPatch):
 
     session.post = mock_post
 
-    async def _fake_login(self, session, username, password, login_data):
+    async def _fake_login(self, session, username, password, login_data, timeout):
         return "token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)

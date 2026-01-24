@@ -99,7 +99,12 @@ async def test_execute_merges_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     session.post.return_value = _DummyResponse({"data": {}})
 
     async def _fake_login(
-        self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
+        self,
+        session: aiohttp.ClientSession,
+        username: str,
+        password: str,
+        login_data: dict,
+        timeout: float,
     ) -> tuple[str, int]:
         assert username == "user@example.com"
         assert password == "super-secret"
@@ -136,7 +141,12 @@ async def test_request_rest_uses_base_url(monkeypatch: pytest.MonkeyPatch) -> No
     session.request.return_value = _DummyRestResponse({"value": 42})
 
     async def _fake_login(
-        self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
+        self,
+        session: aiohttp.ClientSession,
+        username: str,
+        password: str,
+        login_data: dict,
+        timeout: float,
     ) -> tuple[str, int]:
         return "rest-token", 3600
 
@@ -167,7 +177,12 @@ async def test_execute_uses_oidc_token(monkeypatch: pytest.MonkeyPatch) -> None:
     session.post.return_value = _DummyResponse({"data": {}})
 
     async def _fake_login(
-        self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
+        self,
+        session: aiohttp.ClientSession,
+        username: str,
+        password: str,
+        login_data: dict,
+        timeout: float,
     ) -> tuple[str, int]:
         assert username == "user@example.com"
         assert password == "super-secret"
@@ -182,3 +197,36 @@ async def test_execute_uses_oidc_token(monkeypatch: pytest.MonkeyPatch) -> None:
     _, kwargs = session.post.call_args
     headers = kwargs["headers"]
     assert headers["Authorization"] == "Bearer oidc-token"
+
+
+@pytest.mark.asyncio
+async def test_session_uses_configured_connector(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify session is created with configured TCPConnector."""
+    async def _fake_login(
+        self,
+        session: aiohttp.ClientSession,
+        username: str,
+        password: str,
+        login_data: dict,
+        timeout: float,
+    ) -> tuple[str, int]:
+        return "test-token", 3600
+
+    monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
+
+    config = NationalGridConfig(
+        username="user@example.com",
+        password="password",
+        connection_limit=50,
+        connection_limit_per_host=10,
+        dns_cache_ttl=600,
+    )
+
+    async with NationalGridClient(config=config) as client:
+        session = await client._ensure_session()
+
+        # Verify connector is configured with custom limits
+        assert session.connector is not None
+        assert session.connector._limit == 50
+        assert session.connector._limit_per_host == 10
+        # DNS cache TTL is set internally but not directly accessible for verification
