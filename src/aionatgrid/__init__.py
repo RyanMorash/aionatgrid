@@ -11,6 +11,7 @@ from .exceptions import (
     RetryExhaustedError,
 )
 from .graphql import GraphQLRequest, GraphQLResponse
+from .oidchelper import LoginData
 from .queries import (
     DEFAULT_SELECTION_SET,
     ENERGY_USAGE_COSTS_SELECTION_SET,
@@ -30,6 +31,7 @@ __all__ = [
     "RetryConfig",
     "GraphQLRequest",
     "GraphQLResponse",
+    "LoginData",
     "DEFAULT_SELECTION_SET",
     "ENERGY_USAGE_COSTS_SELECTION_SET",
     "ENERGY_USAGES_SELECTION_SET",

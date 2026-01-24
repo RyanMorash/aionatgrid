@@ -3,10 +3,10 @@
 Comprehensive review conducted after fixing critical and high-severity issues.
 
 ## Summary
-- **Medium-Severity Issues**: 2 remaining (6 completed ✅)
+- **Medium-Severity Issues**: 0 remaining (8 completed ✅)
 - **Low-Severity Issues**: 9 found
 - **Code Quality Improvements**: 6 identified
-- **Testing Gaps**: Partially addressed (retry tests added, connector tests added)
+- **Testing Gaps**: Partially addressed (retry tests added, connector tests added, logging tests added)
 
 ## Recent Changes (2026-01-24)
 
@@ -68,30 +68,26 @@ Addressed the top-priority medium-severity issues:
 - `src/aionatgrid/client.py` - Retry loop implementation
 - `tests/test_retry.py` - 9 comprehensive retry tests
 
-### 3. Weak Type Safety for Login Data ⚠️
-**Location**: `client.py:50, 229-231`
+### 3. ~~Weak Type Safety for Login Data~~ ✅ COMPLETED
+**Location**: `client.py:55`, `oidchelper.py:24-33`, `auth.py:36`
 
-**Problem**:
-```python
-self._login_data: dict[str, Any] = {}  # No schema
-# Later used as:
-sub_value = self._login_data.get("sub")
-```
+**Status**: **FIXED** - Implemented `LoginData` TypedDict for type-safe login session data.
 
-This dict is mutated across multiple functions with no type enforcement. Keys like "sub" are magic strings.
+**What Was Implemented**:
+- Created `LoginData` TypedDict in `oidchelper.py` with documented `sub` field
+- Updated type annotations across the authentication chain:
+  - `client.py`: `self._login_data: LoginData = {}`
+  - `auth.py`: `login_data: LoginData` parameter
+  - `oidchelper.py`: `login_data: LoginData | None` parameter
+- Exported `LoginData` from package `__init__.py` for external use
+- Updated test mocks to use `LoginData` type annotation
 
-**Impact**: Potential KeyErrors, type confusion, difficult to maintain.
-
-**Recommendation**:
-```python
-from typing import TypedDict
-
-class LoginData(TypedDict, total=False):
-    sub: str  # User ID from JWT
-    # Add other fields as needed
-
-self._login_data: LoginData = {}
-```
+**Files Modified**:
+- `src/aionatgrid/oidchelper.py` - Added LoginData TypedDict
+- `src/aionatgrid/auth.py` - Updated signature and import
+- `src/aionatgrid/client.py` - Updated type annotation
+- `src/aionatgrid/__init__.py` - Exported LoginData
+- `tests/test_client.py` - Updated mock signatures
 
 ### 4. ~~Unused Exception Classes~~ ✅ COMPLETED
 **Location**: `exceptions.py`
@@ -182,22 +178,39 @@ if isinstance(e, aiohttp.ClientResponseError) and e.status == 401:
 - `src/aionatgrid/client.py` - 401 detection and token clearing
 - `tests/test_retry.py` - Test for 401 re-auth flow
 
-### 8. Response Body Potentially Logged at Warning Level ⚠️
-**Location**: `client.py:100`
+### 8. ~~Response Body Potentially Logged at Warning Level~~ ✅ COMPLETED
+**Location**: `client.py:227-241`
 
-**Problem**:
+**Status**: **FIXED** - Implemented safe logging that separates summary from sensitive details.
+
+**What Was Implemented**:
+- Warning-level logs now only contain safe summary information:
+  - Error count (e.g., "2 error(s)")
+  - Error codes extracted from `extensions.code` field (e.g., `["ACCOUNT_NOT_FOUND", "FORBIDDEN"]`)
+- Full error details (which may contain sensitive data like account numbers, emails) logged only at DEBUG level
+- Added test to verify warning logs don't contain sensitive data
+
+**Implementation**:
 ```python
-logger.warning("GraphQL errors returned: %s", graphql_response.errors)
+if graphql_response.errors:
+    # Safe summary at warning level
+    error_count = len(graphql_response.errors)
+    error_codes = [
+        err.get("extensions", {}).get("code", "UNKNOWN")
+        for err in graphql_response.errors
+    ]
+    logger.warning(
+        "GraphQL request returned %d error(s): %s",
+        error_count,
+        error_codes,
+    )
+    # Full details at debug level only
+    logger.debug("GraphQL error details: %s", graphql_response.errors)
 ```
 
-GraphQL errors might contain sensitive data (user IDs, account numbers, etc.) but are logged at warning level.
-
-**Impact**: Sensitive data could leak into logs.
-
-**Recommendation**:
-- Log at debug level, or
-- Sanitize error messages before logging, or
-- Make logging level configurable
+**Files Modified**:
+- `src/aionatgrid/client.py` - Safe logging implementation
+- `tests/test_client.py` - Added `test_graphql_errors_logged_safely` test
 
 ---
 
@@ -469,8 +482,8 @@ async def test_malformed_settings_extraction():
 1. ~~Investigate unused exception classes (#4)~~ ✅ DONE - Unused exceptions removed
 
 ### Short-Term (Next Sprint)
-1. Improve type safety for login_data (#3)
-2. Review response body logging security (#8)
+1. ~~Improve type safety for login_data (#3)~~ ✅ DONE
+2. ~~Review response body logging security (#8)~~ ✅ DONE
 3. Add circuit breaker pattern
 4. Expand test coverage for untested modules
 
@@ -484,10 +497,10 @@ async def test_malformed_settings_extraction():
 
 ## Conclusion
 
-The codebase is in **excellent shape** after the recent improvements. No critical or high-severity issues remain. The most important medium-severity issues around **error context, retry logic, timeout configuration, and connection pooling have been addressed**.
+The codebase is in **excellent shape** after the recent improvements. **All medium-severity issues have been resolved.** No critical, high, or medium-severity issues remain.
 
-**Overall Code Quality**: A (Excellent)
-- Strong: Type safety, async/await usage, documentation, error handling, retry logic, connection pooling, configurable timeouts
+**Overall Code Quality**: A+ (Excellent)
+- Strong: Type safety, async/await usage, documentation, error handling, retry logic, connection pooling, configurable timeouts, safe logging
 - Needs work: Test coverage for untested modules, operational monitoring
 
 **Recent Improvements** (commits aafedbe, current):
@@ -496,9 +509,11 @@ The codebase is in **excellent shape** after the recent improvements. No critica
 - ✅ Automatic 401 re-authentication
 - ✅ Configurable authentication timeout (respects NationalGridConfig.timeout)
 - ✅ Production-ready connection pooling with TCPConnector
-- ✅ 11 new tests (20 total tests, all passing)
+- ✅ 12 new tests (21 total tests, all passing)
 - ✅ Configurable retry behavior via RetryConfig
 - ✅ DNS caching for reduced latency
 - ✅ Removed unused exception classes (MfaChallengeError, ApiError)
+- ✅ `LoginData` TypedDict for type-safe login session data (#3)
+- ✅ Safe logging - sensitive data only at DEBUG level (#8)
 
-**Next Steps**: Focus on remaining medium-severity issues (#3: type safety for login_data, #8: response body logging security) and expanding test coverage to untested modules.
+**Next Steps**: Focus on expanding test coverage to untested modules and implementing nice-to-have features like circuit breaker pattern and rate limiting.

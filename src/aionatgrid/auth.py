@@ -1,11 +1,10 @@
 """Authentication helpers for the National Grid API."""
 
 import logging
-from typing import Any
 
 import aiohttp
 
-from .oidchelper import async_auth_oidc
+from .oidchelper import LoginData, async_auth_oidc
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ class NationalGridAuth:
         session: aiohttp.ClientSession,
         username: str,
         password: str,
-        login_data: dict[str, Any],
+        login_data: LoginData,
         timeout: float = 30.0,
     ) -> tuple[str, int] | tuple[None, None]:
         """Perform the login process and return an access token with expiry.

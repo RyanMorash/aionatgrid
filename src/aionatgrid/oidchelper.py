@@ -21,6 +21,16 @@ from .helpers import create_cookie_jar
 _LOGGER = logging.getLogger(__name__)
 
 
+class LoginData(TypedDict, total=False):
+    """Dictionary to store login session data.
+
+    Attributes:
+        sub: User subject identifier from OIDC ID token (JWT 'sub' claim).
+    """
+
+    sub: str
+
+
 async def async_auth_oidc(
     session: aiohttp.ClientSession,
     username: str,
@@ -34,7 +44,7 @@ async def async_auth_oidc(
     scope_access: str,
     self_asserted_endpoint: str,
     policy_confirm_endpoint: str,
-    login_data: dict[str, Any] | None = None,
+    login_data: LoginData | None = None,
     timeout: float = 30.0,
 ) -> tuple[str, int] | tuple[None, None]:
     """Perform the login process and return an access token with expiry time.

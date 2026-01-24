@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock
 
 import aiohttp
@@ -8,6 +9,7 @@ import pytest
 from aionatgrid.client import NationalGridClient
 from aionatgrid.config import NationalGridConfig
 from aionatgrid.graphql import GraphQLRequest
+from aionatgrid.oidchelper import LoginData
 
 
 class _DummyResponse:
@@ -103,7 +105,7 @@ async def test_execute_merges_headers(monkeypatch: pytest.MonkeyPatch) -> None:
         session: aiohttp.ClientSession,
         username: str,
         password: str,
-        login_data: dict,
+        login_data: LoginData,
         timeout: float,
     ) -> tuple[str, int]:
         assert username == "user@example.com"
@@ -145,7 +147,7 @@ async def test_request_rest_uses_base_url(monkeypatch: pytest.MonkeyPatch) -> No
         session: aiohttp.ClientSession,
         username: str,
         password: str,
-        login_data: dict,
+        login_data: LoginData,
         timeout: float,
     ) -> tuple[str, int]:
         return "rest-token", 3600
@@ -181,7 +183,7 @@ async def test_execute_uses_oidc_token(monkeypatch: pytest.MonkeyPatch) -> None:
         session: aiohttp.ClientSession,
         username: str,
         password: str,
-        login_data: dict,
+        login_data: LoginData,
         timeout: float,
     ) -> tuple[str, int]:
         assert username == "user@example.com"
@@ -207,7 +209,7 @@ async def test_session_uses_configured_connector(monkeypatch: pytest.MonkeyPatch
         session: aiohttp.ClientSession,
         username: str,
         password: str,
-        login_data: dict,
+        login_data: LoginData,
         timeout: float,
     ) -> tuple[str, int]:
         return "test-token", 3600
@@ -230,3 +232,71 @@ async def test_session_uses_configured_connector(monkeypatch: pytest.MonkeyPatch
         assert session.connector._limit == 50
         assert session.connector._limit_per_host == 10
         # DNS cache TTL is set internally but not directly accessible for verification
+
+
+class _DummyResponseWithErrors:
+    """Response that returns GraphQL errors containing sensitive data."""
+
+    def __init__(self, errors: list[dict[str, object]]):
+        self._payload = {"data": None, "errors": errors}
+
+    async def __aenter__(self) -> _DummyResponseWithErrors:
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:  # type: ignore[override]
+        return False
+
+    async def json(self, content_type: str | None = None) -> dict[str, object]:
+        return self._payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_graphql_errors_logged_safely(caplog: pytest.LogCaptureFixture) -> None:
+    """Verify warning logs don't expose sensitive error details."""
+    config = NationalGridConfig(endpoint="https://example.test/graphql")
+    session = MagicMock(spec=aiohttp.ClientSession)
+    session.closed = False
+
+    # Simulate GraphQL errors containing potentially sensitive data
+    sensitive_account_number = "1234567890"
+    errors = [
+        {
+            "message": f"Account {sensitive_account_number} not found",
+            "extensions": {"code": "ACCOUNT_NOT_FOUND"},
+            "path": ["billingAccount"],
+        },
+        {
+            "message": "User user@example.com has insufficient permissions",
+            "extensions": {"code": "FORBIDDEN"},
+            "path": ["energyUsage"],
+        },
+    ]
+    session.post.return_value = _DummyResponseWithErrors(errors)
+
+    client = NationalGridClient(config=config, session=session)
+    request = GraphQLRequest(query="query Test { value }")
+
+    with caplog.at_level(logging.WARNING, logger="aionatgrid.client"):
+        response = await client.execute(request)
+
+    # Verify response has errors
+    assert response.errors is not None
+    assert len(response.errors) == 2
+
+    # Verify warning logs contain only safe summary info (error codes and count)
+    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warning_records) == 1
+    warning_message = warning_records[0].message
+
+    # Error codes and count should be in warning
+    assert "2 error(s)" in warning_message
+    assert "ACCOUNT_NOT_FOUND" in warning_message
+    assert "FORBIDDEN" in warning_message
+
+    # Sensitive data should NOT be in warning logs
+    assert sensitive_account_number not in warning_message
+    assert "user@example.com" not in warning_message
+    assert "Account" not in warning_message  # Full error message not present

@@ -16,6 +16,7 @@ from .auth import NationalGridAuth
 from .config import NationalGridConfig, RetryConfig
 from .exceptions import GraphQLError, RestAPIError, RetryExhaustedError
 from .graphql import GraphQLRequest, GraphQLResponse
+from .oidchelper import LoginData
 from .queries import (
     BILLING_ACCOUNT_INFO_SELECTION_SET,
     ENERGY_USAGE_COSTS_SELECTION_SET,
@@ -51,7 +52,7 @@ class NationalGridClient:
         self._token_expires_at: float | None = None
         self._auth_lock = asyncio.Lock()
         self._session_lock = asyncio.Lock()
-        self._login_data: dict[str, Any] = {}
+        self._login_data: LoginData = {}
 
     @property
     def config(self) -> NationalGridConfig:
@@ -225,7 +226,19 @@ class NationalGridClient:
 
                 graphql_response = GraphQLResponse.from_payload(body)
                 if graphql_response.errors:
-                    logger.warning("GraphQL errors returned: %s", graphql_response.errors)
+                    # Log summary at warning level (safe for production)
+                    error_count = len(graphql_response.errors)
+                    error_codes = [
+                        err.get("extensions", {}).get("code", "UNKNOWN")
+                        for err in graphql_response.errors
+                    ]
+                    logger.warning(
+                        "GraphQL request returned %d error(s): %s",
+                        error_count,
+                        error_codes,
+                    )
+                    # Full details at debug level for troubleshooting
+                    logger.debug("GraphQL error details: %s", graphql_response.errors)
                 return graphql_response
 
             except Exception as e:
