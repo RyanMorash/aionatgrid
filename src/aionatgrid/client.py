@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urljoin
@@ -26,6 +27,9 @@ from .rest_queries import realtime_meter_info_request
 
 logger = logging.getLogger(__name__)
 
+# Buffer time before actual expiration to refresh token (5 minutes)
+TOKEN_EXPIRY_BUFFER_SECONDS = 300
+
 
 class NationalGridClient:
     """High-level client that reuses an aiohttp session."""
@@ -40,7 +44,9 @@ class NationalGridClient:
         self._session = session
         self._owns_session = session is None
         self._access_token: str | None = None
+        self._token_expires_at: float | None = None
         self._auth_lock = asyncio.Lock()
+        self._session_lock = asyncio.Lock()
         self._login_data: dict[str, Any] = {}
 
     @property
@@ -138,20 +144,37 @@ class NationalGridClient:
             )
 
     async def _get_access_token(self, session: aiohttp.ClientSession) -> str | None:
-        if self._access_token:
-            return self._access_token
+        # Check if we have a valid cached token
+        if self._access_token and self._token_expires_at:
+            # Add buffer time to refresh before actual expiration
+            if time.time() < (self._token_expires_at - TOKEN_EXPIRY_BUFFER_SECONDS):
+                return self._access_token
+            logger.debug("Access token expired or expiring soon, refreshing")
+
         if not (self._config.username and self._config.password):
             return None
+
         async with self._auth_lock:
-            if self._access_token:
-                return self._access_token
+            # Double-check after acquiring lock
+            if self._access_token and self._token_expires_at:
+                if time.time() < (self._token_expires_at - TOKEN_EXPIRY_BUFFER_SECONDS):
+                    return self._access_token
+
             auth_client = NationalGridAuth()
-            self._access_token = await auth_client.async_login(
+            token, expires_in = await auth_client.async_login(
                 session,
                 self._config.username,
                 self._config.password,
                 self._login_data,
             )
+            if token and expires_in:
+                self._access_token = token
+                self._token_expires_at = time.time() + expires_in
+                logger.debug("Access token refreshed, expires in %d seconds", expires_in)
+            else:
+                self._access_token = None
+                self._token_expires_at = None
+
         return self._access_token
 
     def _resolve_rest_url(self, path_or_url: str) -> str:
@@ -168,12 +191,19 @@ class NationalGridClient:
             return await response.text()
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
+        # Fast path: check without lock if session exists and is open
         if self._session and not self._session.closed:
             return self._session
 
-        timeout = aiohttp.ClientTimeout(total=self._config.timeout)
-        self._session = aiohttp.ClientSession(timeout=timeout)
-        return self._session
+        # Slow path: acquire lock to create session
+        async with self._session_lock:
+            # Double-check after acquiring lock
+            if self._session and not self._session.closed:
+                return self._session
+
+            timeout = aiohttp.ClientTimeout(total=self._config.timeout)
+            self._session = aiohttp.ClientSession(timeout=timeout)
+            return self._session
 
     async def ping(self) -> bool:
         """Simple health-check that issues an empty request body."""

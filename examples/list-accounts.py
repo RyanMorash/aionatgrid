@@ -10,5 +10,6 @@ async def main() -> None:
         print("Linked Billing Accounts Response:")
         print(response.data)
 
+
 if __name__ == "__main__":
     asyncio.run(main())

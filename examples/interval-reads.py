@@ -13,5 +13,6 @@ async def main() -> None:
         )
         print(response.status, response.data)
 
+
 if __name__ == "__main__":
     asyncio.run(main())

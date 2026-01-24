@@ -100,10 +100,10 @@ async def test_execute_merges_headers(monkeypatch: pytest.MonkeyPatch) -> None:
 
     async def _fake_login(
         self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
-    ) -> str:
+    ) -> tuple[str, int]:
         assert username == "user@example.com"
         assert password == "super-secret"
-        return "token"
+        return "token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
 
@@ -137,8 +137,8 @@ async def test_request_rest_uses_base_url(monkeypatch: pytest.MonkeyPatch) -> No
 
     async def _fake_login(
         self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
-    ) -> str:
-        return "rest-token"
+    ) -> tuple[str, int]:
+        return "rest-token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
 
@@ -168,10 +168,10 @@ async def test_execute_uses_oidc_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
     async def _fake_login(
         self, session: aiohttp.ClientSession, username: str, password: str, login_data: dict
-    ) -> str:
+    ) -> tuple[str, int]:
         assert username == "user@example.com"
         assert password == "super-secret"
-        return "oidc-token"
+        return "oidc-token", 3600
 
     monkeypatch.setattr("aionatgrid.client.NationalGridAuth.async_login", _fake_login)
 

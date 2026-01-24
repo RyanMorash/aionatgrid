@@ -36,11 +36,7 @@ class NationalGridConfig:
         endpoint = os.environ.get(endpoint_env, DEFAULT_ENDPOINT)
         username = os.environ.get(username_env)
         password = os.environ.get(password_env)
-        return cls(
-            endpoint=endpoint,
-            username=username,
-            password=password
-        )
+        return cls(endpoint=endpoint, username=username, password=password)
 
     def build_headers(
         self,

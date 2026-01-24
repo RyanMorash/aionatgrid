@@ -35,10 +35,15 @@ class NationalGridAuth:
         username: str,
         password: str,
         login_data: dict[str, Any],
-    ) -> str | None:
-        """Perform the login process and return an access token."""
+    ) -> tuple[str, int] | tuple[None, None]:
+        """Perform the login process and return an access token with expiry.
+
+        Returns:
+            Tuple of (access_token, expires_in_seconds) on success, (None, None) on failure.
+        """
         _LOGGER.debug("Starting login process for National Grid")
         return await async_auth_oidc(
+            session,
             username,
             password,
             NationalGridAuth.BASE_URL,

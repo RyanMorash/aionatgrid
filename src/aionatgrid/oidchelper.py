@@ -1,12 +1,11 @@
 """OIDC Login Helper and its constituent functions."""
 
-import asyncio
 import base64
 import hashlib
 import json
 import logging
+import re
 import secrets
-import ssl
 from typing import Any, TypedDict
 from urllib.parse import parse_qs, urlparse
 
@@ -15,12 +14,12 @@ import jwt
 from jwt import PyJWKClient
 
 from .exceptions import CannotConnectError, InvalidAuthError
-from .helpers import create_cookie_jar
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_auth_oidc(
+    session: aiohttp.ClientSession,
     username: str,
     password: str,
     base_url: str,
@@ -33,19 +32,20 @@ async def async_auth_oidc(
     self_asserted_endpoint: str,
     policy_confirm_endpoint: str,
     login_data: dict[str, Any] | None = None,
-) -> str | None:
-    """Perform the login process and return an access token."""
-    ssl_context = await asyncio.get_running_loop().run_in_executor(None, ssl.create_default_context)
-    connector = aiohttp.TCPConnector(ssl=ssl_context)
-    secure_session = aiohttp.ClientSession(connector=connector, cookie_jar=create_cookie_jar())
+) -> tuple[str, int] | tuple[None, None]:
+    """Perform the login process and return an access token with expiry time.
+
+    Returns:
+        Tuple of (access_token, expires_in_seconds) on success, (None, None) on failure.
+    """
     try:
         code_verifier = _generate_code_verifier()
         code_challenge = _generate_code_challenge(code_verifier)
         _LOGGER.debug("Generated PKCE code verifier and challenge")
-        config = await _get_config(secure_session, base_url, tenant_id, policy)
+        config = await _get_config(session, base_url, tenant_id, policy)
         _LOGGER.debug("Retrieved OAuth configuration")
         auth_code, sub_value = await _get_auth(
-            secure_session,
+            session,
             config,
             code_challenge,
             username,
@@ -65,7 +65,7 @@ async def async_auth_oidc(
         _LOGGER.debug("Obtained authorization code")
 
         tokens = await _get_access(
-            secure_session,
+            session,
             config,
             auth_code,
             code_verifier,
@@ -76,15 +76,15 @@ async def async_auth_oidc(
 
         if tokens and "access_token" in tokens:
             _LOGGER.debug("Successfully obtained access token")
-            return tokens["access_token"]
+            # Default to 3600 seconds (1 hour) if not provided
+            expires_in = tokens.get("expires_in", 3600)
+            return tokens["access_token"], expires_in
         _LOGGER.error("Failed to obtain access token")
         raise CannotConnectError("Failed to obtain access token")
 
     except aiohttp.ClientError as err:
         _LOGGER.exception("Connection error during login")
         raise CannotConnectError(f"Connection error: {err}") from err
-    finally:
-        await secure_session.close()
 
 
 class ConfigDict(TypedDict):
@@ -96,10 +96,11 @@ class ConfigDict(TypedDict):
     jwks_uri: str
 
 
-class TokenDict(TypedDict):
+class TokenDict(TypedDict, total=False):
     """Dictionary to store OAuth tokens."""
 
     access_token: str
+    expires_in: int  # Token lifetime in seconds
 
 
 def _generate_code_verifier() -> str:
@@ -234,25 +235,37 @@ async def _fetch(
 
 
 def _extract_settings(auth_content: str) -> dict[str, Any] | None:
-    """Extract settings from the authorization content."""
+    """Extract settings from the authorization content using multiple strategies."""
     _LOGGER.debug("Extracting settings from authorization content")
+
+    # Strategy 1: String slicing (original method, fastest)
     settings_start = auth_content.find("var SETTINGS = ")
-    if settings_start == -1:
-        _LOGGER.debug("Settings not found in authorization content")
-        return None
-    settings_end = auth_content.find(";", settings_start)
-    if settings_end == -1:
-        _LOGGER.debug("End of settings not found in authorization content")
-        return None
-    settings_json = auth_content[settings_start + 15 : settings_end].strip()
-    try:
-        settings: dict[str, Any] = json.loads(settings_json)
-    except json.JSONDecodeError:
-        _LOGGER.exception("Failed to parse settings JSON")
-        return None
-    else:
-        _LOGGER.debug("Settings successfully extracted")
-        return settings
+    if settings_start != -1:
+        settings_end = auth_content.find(";", settings_start)
+        if settings_end != -1:
+            settings_json = auth_content[settings_start + 15 : settings_end].strip()
+            try:
+                settings: dict[str, Any] = json.loads(settings_json)
+                _LOGGER.debug("Settings extracted via string slicing")
+                return settings
+            except json.JSONDecodeError:
+                _LOGGER.warning("String slicing extracted invalid JSON, trying regex")
+
+    # Strategy 2: Regex pattern matching (more robust fallback)
+    # Matches: var SETTINGS = {...}; or var SETTINGS={...};
+    pattern = r"var\s+SETTINGS\s*=\s*(\{[^;]+\})\s*;"
+    match = re.search(pattern, auth_content)
+    if match:
+        settings_json = match.group(1).strip()
+        try:
+            settings = json.loads(settings_json)
+            _LOGGER.debug("Settings extracted via regex")
+            return settings
+        except json.JSONDecodeError:
+            _LOGGER.exception("Failed to parse settings JSON from regex match")
+
+    _LOGGER.warning("Could not extract settings from authorization content")
+    return None
 
 
 async def _post_credentials(

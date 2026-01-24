@@ -69,10 +69,13 @@ Helper functions like `linked_billing_accounts_request()` provide pre-configured
 
 ### Authentication Flow
 1. First API call triggers `_get_access_token()` with double-checked locking
-2. `NationalGridAuth.async_login()` delegates to `oidchelper.async_auth_oidc()`
-3. OIDC helper performs Azure AD B2C flow (see oidchelper.py for full OIDC implementation)
-4. Token is cached in `_access_token` and reused for subsequent requests
-5. `login_data` dict accumulates session info (e.g., `sub` claim for userId)
+2. Before using cached token, checks if it's expired (with 5-minute buffer for safety)
+3. `NationalGridAuth.async_login()` delegates to `oidchelper.async_auth_oidc()`
+4. OIDC helper performs Azure AD B2C flow using the client's existing session (no duplicate sessions created)
+5. Returns tuple of `(access_token, expires_in_seconds)` instead of just the token
+6. Token and expiry timestamp cached in `_access_token` and `_token_expires_at`
+7. Automatic token refresh before expiration prevents 401 errors
+8. `login_data` dict accumulates session info (e.g., `sub` claim for userId extracted from verified JWT)
 
 ### Configuration Management
 `NationalGridConfig` (config.py) is a frozen dataclass with:
@@ -101,3 +104,12 @@ Tests use mocked `aiohttp.ClientSession` objects with custom response classes (`
 - All GraphQL requests require `ocp-apim-subscription-key` header (configured in config.py)
 - OIDC authentication is mandatory for production usage (username/password required)
 - Session management follows context manager pattern (prefer `async with` over manual `close()`)
+- Access tokens expire after ~1 hour and are automatically refreshed 5 minutes before expiration
+- JWT signature verification requires network access to fetch signing keys from JWKS endpoint
+
+## Recent Security Improvements
+
+- **JWT Verification**: ID tokens are now cryptographically verified using PyJWT with RS256 signature validation
+- **Token Expiration**: Access tokens are tracked and automatically refreshed before expiration
+- **Session Reuse**: Authentication reuses the client's session instead of creating duplicate connections
+- **Robust Parsing**: Settings extraction uses dual-strategy parsing (string slicing + regex fallback)
