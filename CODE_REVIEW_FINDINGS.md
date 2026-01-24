@@ -3,7 +3,7 @@
 Comprehensive review conducted after fixing critical and high-severity issues.
 
 ## Summary
-- **Medium-Severity Issues**: 3 remaining (5 completed ✅)
+- **Medium-Severity Issues**: 2 remaining (6 completed ✅)
 - **Low-Severity Issues**: 9 found
 - **Code Quality Improvements**: 6 identified
 - **Testing Gaps**: Partially addressed (retry tests added, connector tests added)
@@ -93,19 +93,14 @@ class LoginData(TypedDict, total=False):
 self._login_data: LoginData = {}
 ```
 
-### 4. Unused Exception Classes ⚠️
-**Location**: `exceptions.py:12-13, 16-40`
+### 4. ~~Unused Exception Classes~~ ✅ COMPLETED
+**Location**: `exceptions.py`
 
-**Problem**:
-- `MfaChallengeError` is defined but never raised anywhere
-- `ApiError` is well-designed but never used
+**Status**: **FIXED** - Unused exception classes have been removed from the codebase.
 
-**Impact**: Dead code increases maintenance burden and confuses users about error handling.
-
-**Recommendation**:
-- Either use these exceptions or remove them
-- If MFA is planned for future, add a TODO comment
-- Consider using `ApiError` to wrap HTTP failures with context
+**What Was Done**:
+- Removed `MfaChallengeError` and `ApiError` classes that were never used
+- Current exceptions are all actively used: `CannotConnectError`, `InvalidAuthError`, `NationalGridError`, `GraphQLError`, `RestAPIError`, `RetryExhaustedError`
 
 ### 5. ~~Hardcoded Timeout in Authentication~~ ✅ COMPLETED
 **Location**: `oidchelper.py:225`
@@ -468,9 +463,10 @@ async def test_malformed_settings_extraction():
 4. ~~Write tests for error scenarios~~ - DONE (9 retry tests added)
 5. ~~Fix hardcoded timeout in authentication (#5)~~ - DONE
 6. ~~Add connection pool configuration (#6)~~ - DONE
+7. ~~Remove unused exception classes (#4)~~ - DONE
 
 ### Immediate (Should Fix Soon)
-1. Investigate unused exception classes (#4) - *Note: Recent exploration confirmed all exceptions are actively used*
+1. ~~Investigate unused exception classes (#4)~~ ✅ DONE - Unused exceptions removed
 
 ### Short-Term (Next Sprint)
 1. Improve type safety for login_data (#3)
@@ -503,5 +499,6 @@ The codebase is in **excellent shape** after the recent improvements. No critica
 - ✅ 11 new tests (20 total tests, all passing)
 - ✅ Configurable retry behavior via RetryConfig
 - ✅ DNS caching for reduced latency
+- ✅ Removed unused exception classes (MfaChallengeError, ApiError)
 
-**Next Steps**: Focus on remaining medium-severity issues (type safety for login_data, response body logging security) and expanding test coverage to untested modules.
+**Next Steps**: Focus on remaining medium-severity issues (#3: type safety for login_data, #8: response body logging security) and expanding test coverage to untested modules.
