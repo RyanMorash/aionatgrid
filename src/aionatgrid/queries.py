@@ -52,15 +52,19 @@ meter {
 }
 """
 ENERGY_USAGE_COSTS_SELECTION_SET = """
-date
-fuelType
-amount
-month
+nodes {
+    date
+    fuelType
+    amount
+    month
+}
 """
 ENERGY_USAGES_SELECTION_SET = """
-usage
-usageType
-usageYearMonth
+nodes {
+    usage
+    usageType
+    usageYearMonth
+}
 """
 
 
