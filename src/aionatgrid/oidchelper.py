@@ -32,7 +32,7 @@ class LoginData(TypedDict, total=False):
 
 
 async def async_auth_oidc(
-    session: aiohttp.ClientSession,
+    session: aiohttp.ClientSession | None,
     username: str,
     password: str,
     base_url: str,
@@ -49,37 +49,62 @@ async def async_auth_oidc(
 ) -> tuple[str, int] | tuple[None, None]:
     """Perform the login process and return an access token with expiry time.
 
-    Note: This function creates its own dedicated session for OIDC authentication
-    with proper SSL and cookie handling. The passed session parameter is ignored
-    but kept for API compatibility.
-
     Args:
-        session: Ignored - kept for API compatibility
+        session: Optional client session to use for OIDC authentication. If not
+            provided (None), creates an internal session with proper cookie
+            handling for Azure AD B2C.
+
+            **Important**: If providing your own session, ensure it uses a
+            CookieJar with quote_cookie=False for Azure AD B2C compatibility::
+
+                from aionatgrid import create_cookie_jar
+                cookie_jar = create_cookie_jar()
+                session = aiohttp.ClientSession(cookie_jar=cookie_jar)
+
+        username: National Grid account username/email.
+        password: National Grid account password.
+        base_url: Azure AD B2C base URL.
+        tenant_id: Azure AD B2C tenant ID.
+        policy: Azure AD B2C policy name.
+        client_id: OAuth client ID.
+        redirect_uri: OAuth redirect URI.
+        scope_auth: OAuth scopes for authorization request.
+        scope_access: OAuth scopes for token request.
+        self_asserted_endpoint: Azure AD B2C self-asserted endpoint path.
+        policy_confirm_endpoint: Azure AD B2C policy confirm endpoint path.
+        login_data: Optional dict to store login session data (e.g., 'sub' claim).
         timeout: Request timeout in seconds for authentication requests (default: 30.0)
 
     Returns:
         Tuple of (access_token, expires_in_seconds) on success, (None, None) on failure.
     """
-    # Create a dedicated session for OIDC with proper SSL and cookie handling
+    # Use provided session or create one with proper SSL and cookie handling
     # Azure AD B2C requires specific cookie handling (quote_cookie=False)
-    ssl_context = await asyncio.get_running_loop().run_in_executor(
-        None, ssl.create_default_context
-    )
-    connector = aiohttp.TCPConnector(ssl=ssl_context)
-    secure_session = aiohttp.ClientSession(
-        connector=connector, cookie_jar=create_cookie_jar()
-    )
+    owns_session = session is None
+    active_session: aiohttp.ClientSession
+    if owns_session:
+        ssl_context = await asyncio.get_running_loop().run_in_executor(
+            None, ssl.create_default_context
+        )
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        active_session = aiohttp.ClientSession(
+            connector=connector, cookie_jar=create_cookie_jar()
+        )
+    else:
+        # session is guaranteed non-None here since owns_session = (session is None)
+        assert session is not None
+        active_session = session
 
     try:
         code_verifier = _generate_code_verifier()
         code_challenge = _generate_code_challenge(code_verifier)
         _LOGGER.debug("Generated PKCE code verifier and challenge")
         config = await _get_config(
-            secure_session, base_url, tenant_id, policy, timeout=timeout
+            active_session, base_url, tenant_id, policy, timeout=timeout
         )
         _LOGGER.debug("Retrieved OAuth configuration")
         auth_code, sub_value = await _get_auth(
-            secure_session,
+            active_session,
             config,
             code_challenge,
             username,
@@ -100,7 +125,7 @@ async def async_auth_oidc(
         _LOGGER.debug("Obtained authorization code")
 
         tokens = await _get_access(
-            secure_session,
+            active_session,
             config,
             auth_code,
             code_verifier,
@@ -131,7 +156,8 @@ async def async_auth_oidc(
         _LOGGER.exception("Connection error during login")
         raise CannotConnectError(f"Connection error: {err}") from err
     finally:
-        await secure_session.close()
+        if owns_session:
+            await active_session.close()
 
 
 class ConfigDict(TypedDict):

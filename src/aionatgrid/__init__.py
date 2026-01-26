@@ -18,6 +18,7 @@ from .extractors import (
     extract_linked_accounts,
 )
 from .graphql import GraphQLRequest, GraphQLResponse
+from .helpers import create_cookie_jar
 from .models import (
     AccountLink,
     AccountLinksConnection,
@@ -54,6 +55,7 @@ __all__ = [
     "GraphQLRequest",
     "GraphQLResponse",
     "LoginData",
+    "create_cookie_jar",
     "DEFAULT_SELECTION_SET",
     "ENERGY_USAGE_COSTS_SELECTION_SET",
     "ENERGY_USAGES_SELECTION_SET",
