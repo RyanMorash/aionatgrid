@@ -9,19 +9,14 @@ from aionatgrid.helpers import create_cookie_jar
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch interval reads")
-    parser.add_argument("--username", help="National Grid username (or set NATIONALGRID_USERNAME)")
-    parser.add_argument("--password", help="National Grid password (or set NATIONALGRID_PASSWORD)")
+    parser.add_argument("--username", required=True, help="National Grid username")
+    parser.add_argument("--password", required=True, help="National Grid password")
     return parser.parse_args()
 
 
 async def main() -> None:
     args = parse_args()
-    config = NationalGridConfig.from_env()
-    if args.username or args.password:
-        config = config.with_overrides(
-            username=args.username or config.username,
-            password=args.password or config.password,
-        )
+    config = NationalGridConfig(username=args.username, password=args.password)
     cookie_jar = create_cookie_jar()
     async with aiohttp.ClientSession(cookie_jar=cookie_jar) as session:
         async with NationalGridClient(config=config, session=session) as client:

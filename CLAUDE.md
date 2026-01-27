@@ -27,15 +27,10 @@ uv run mypy src            # Type-check source code
 
 ### Running Examples
 ```bash
-# Set required environment variables first
-export NATIONALGRID_GRAPHQL_ENDPOINT="https://myaccount.nationalgrid.com/api/user-cu-uwp-gql"
-export NATIONALGRID_USERNAME="user@example.com"
-export NATIONALGRID_PASSWORD="your-password"
-
-uv run python examples/list-accounts.py     # List linked billing accounts
-uv run python examples/account-info.py      # Get billing account details
-uv run python examples/interval-reads.py    # Fetch interval read data
-uv run python examples/energy-usage.py      # Get energy usage data
+uv run python examples/list-accounts.py --username user@example.com --password secret
+uv run python examples/account-info.py --username user@example.com --password secret
+uv run python examples/interval-reads.py --username user@example.com --password secret
+uv run python examples/energy-usage.py --username user@example.com --password secret
 ```
 
 ### Makefile Shortcuts
@@ -86,11 +81,11 @@ Helper functions like `linked_billing_accounts_request()` provide pre-configured
 8. `login_data` dict accumulates session info (e.g., `sub` claim for userId extracted from verified JWT)
 
 ### Configuration Management
-`NationalGridConfig` (config.py) is a frozen dataclass with:
-- `from_env()` class method for environment variable loading
+`NationalGridConfig` (config.py) is a dataclass with:
 - `build_headers()` method that merges authentication, subscription keys, and custom headers
 - `with_overrides()` for creating modified config instances
 - Hard-coded subscription key (`e674f89d7ed9417194de894b701333dd`) required for API access
+- Credentials (username/password) must be passed explicitly; no environment variable loading
 
 ### Request/Response Abstractions
 - `GraphQLRequest`/`GraphQLResponse` (graphql.py): Thin wrappers around GraphQL payloads

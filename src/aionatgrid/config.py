@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 
@@ -40,21 +39,6 @@ class NationalGridConfig:
     connection_limit: int = 100  # Total connection pool size
     connection_limit_per_host: int = 30  # Connections per individual host
     dns_cache_ttl: int = 300  # DNS cache TTL in seconds
-
-    @classmethod
-    def from_env(
-        cls,
-        *,
-        endpoint_env: str = "NATIONALGRID_GRAPHQL_ENDPOINT",
-        username_env: str = "NATIONALGRID_USERNAME",
-        password_env: str = "NATIONALGRID_PASSWORD",
-    ) -> NationalGridConfig:
-        """Load configuration values from environment variables."""
-
-        endpoint = os.environ.get(endpoint_env, DEFAULT_ENDPOINT)
-        username = os.environ.get(username_env)
-        password = os.environ.get(password_env)
-        return cls(endpoint=endpoint, username=username, password=password)
 
     def build_headers(
         self,

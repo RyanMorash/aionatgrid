@@ -9,7 +9,7 @@
 - Keep GraphQL request building via `StandardQuery` and `compose_query()` helpers.
 - Authentication is required for production usage; do not bypass OIDC flow in library code.
 - All GraphQL calls must include the `ocp-apim-subscription-key` header from config.
-- Maintain the frozen `NationalGridConfig` API (`from_env`, `build_headers`, `with_overrides`).
+- Maintain the `NationalGridConfig` API (`build_headers`, `with_overrides`); credentials must be passed explicitly.
 - Tests should mock `aiohttp.ClientSession` and `NationalGridAuth.async_login` as in existing patterns.
 - Use `pytest-asyncio` for async tests; keep tests in `tests/`.
 - Keep communication concise and focused; follow development best practices.

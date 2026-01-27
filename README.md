@@ -8,7 +8,7 @@ Asynchronous Python client for communicating with National Grid's GraphQL and RE
 - Automatic OIDC authentication via Azure AD B2C with token caching and refresh
 - Multi-endpoint GraphQL routing (user, billing account, energy usage endpoints)
 - REST API support with shared authentication
-- Configurable via `NationalGridConfig` with environment variable loading
+- Configurable via `NationalGridConfig` dataclass
 - JWT token verification and automatic expiration handling
 
 ## Requirements
@@ -23,21 +23,16 @@ The command creates a `.venv` managed by `uv` and installs runtime plus developm
 
 ## Usage
 
-### Configuration
-Export your National Grid credentials:
-```bash
-export NATIONALGRID_GRAPHQL_ENDPOINT="https://myaccount.nationalgrid.com/api/user-cu-uwp-gql"
-export NATIONALGRID_USERNAME="user@example.com"
-export NATIONALGRID_PASSWORD="your-password"
-```
-
 ### Quick Start
 ```python
 import asyncio
 from aionatgrid import NationalGridClient, NationalGridConfig
 
 async def main() -> None:
-    config = NationalGridConfig.from_env()
+    config = NationalGridConfig(
+        username="user@example.com",
+        password="your-password",
+    )
 
     async with NationalGridClient(config=config) as client:
         # Get linked billing accounts
@@ -68,7 +63,10 @@ from datetime import date
 from aionatgrid import NationalGridClient, NationalGridConfig
 
 async def main() -> None:
-    config = NationalGridConfig.from_env()
+    config = NationalGridConfig(
+        username="user@example.com",
+        password="your-password",
+    )
 
     async with NationalGridClient(config=config) as client:
         # Step 1: Get linked accounts
@@ -131,10 +129,10 @@ print(response.status, response.data)
 
 Run the included example scripts:
 ```bash
-uv run python examples/list-accounts.py    # List linked billing accounts
-uv run python examples/account-info.py     # Fetch billing account details
-uv run python examples/energy-usage.py     # Fetch energy costs and usage history
-uv run python examples/interval-reads.py   # Fetch interval meter readings
+uv run python examples/list-accounts.py --username user@example.com --password secret
+uv run python examples/account-info.py --username user@example.com --password secret
+uv run python examples/energy-usage.py --username user@example.com --password secret
+uv run python examples/interval-reads.py --username user@example.com --password secret
 ```
 
 ## Testing and Linting
