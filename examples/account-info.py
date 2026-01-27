@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 
@@ -11,12 +12,25 @@ from aionatgrid import NationalGridClient, NationalGridConfig
 from aionatgrid.helpers import create_cookie_jar
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Fetch billing account information")
+    parser.add_argument("--username", help="National Grid username (or set NATIONALGRID_USERNAME)")
+    parser.add_argument("--password", help="National Grid password (or set NATIONALGRID_PASSWORD)")
+    return parser.parse_args()
+
+
 def pretty_print(data: object) -> None:
     print(json.dumps(data, indent=2, sort_keys=True))
 
 
 async def main() -> None:
+    args = parse_args()
     config = NationalGridConfig.from_env()
+    if args.username or args.password:
+        config = config.with_overrides(
+            username=args.username or config.username,
+            password=args.password or config.password,
+        )
 
     cookie_jar = create_cookie_jar()
     async with aiohttp.ClientSession(cookie_jar=cookie_jar) as session:
