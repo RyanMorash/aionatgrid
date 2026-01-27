@@ -19,6 +19,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Framework :: AsyncIO",
     "Topic :: Internet :: WWW/HTTP",
     "License :: OSI Approved :: Apache Software License",
 ]
@@ -28,12 +30,10 @@ dependencies = [
     "PyJWT[crypto]>=2.8.0",
 ]
 
-dynamic = []
-
 [project.urls]
 repository = "https://github.com/ryanmorash/aionatgrid"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=7.4",
     "pytest-asyncio>=0.23",
@@ -54,6 +54,8 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests", "examples"]
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP"]
 
 [tool.mypy]
@@ -62,10 +64,3 @@ strict = true
 mypy_path = ["src"]
 warn_unused_configs = true
 
-[tool.uv]
-dev-dependencies = [
-    "pytest>=7.4",
-    "pytest-asyncio>=0.23",
-    "ruff>=0.1.13",
-    "mypy>=1.7",
-]
