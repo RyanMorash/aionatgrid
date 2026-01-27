@@ -77,10 +77,10 @@ class BillingAccount(TypedDict):
 class EnergyUsageCost(TypedDict):
     """Energy usage cost data."""
 
-    date: str
+    date: str  # YYYY-MM-DD
     fuelType: str
     amount: float
-    month: str
+    month: int
 
 
 class EnergyUsageCostsConnection(TypedDict):
