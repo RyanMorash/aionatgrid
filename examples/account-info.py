@@ -32,48 +32,24 @@ async def main() -> None:
         async with NationalGridClient(config=config, session=session) as client:
             # First, get linked billing accounts
             print("Fetching linked billing accounts...")
-            accounts_response = await client.linked_billing_accounts()
+            accounts = await client.get_linked_accounts()
 
-            if accounts_response.errors:
-                print("Error fetching linked accounts:")
-                pretty_print(accounts_response.errors)
-                return
-
-            # Extract the account links from the response
-            data = accounts_response.data or {}
-            account_links = (
-                data.get("user", {}).get("accountLinks", {}).get("nodes", [])
-            )
-
-            if not account_links:
+            if not accounts:
                 print("No linked billing accounts found.")
                 return
 
             # Use the first (primary) billing account
-            primary_account = account_links[0]
-            billing_account_id = primary_account.get("billingAccountId")
-
-            if not billing_account_id:
-                print("Primary account is missing billingAccountId.")
-                return
-
-            print(f"Found {len(account_links)} linked account(s).")
+            billing_account_id = accounts[0]["billingAccountId"]
+            print(f"Found {len(accounts)} linked account(s).")
             print(f"Primary billing account ID: {billing_account_id}")
             print()
 
             # Now fetch detailed information for the primary account
             print("Fetching billing account information...")
-            info_response = await client.billing_account_info(
-                variables={"accountNumber": billing_account_id}
-            )
-
-            if info_response.errors:
-                print("Error fetching account info:")
-                pretty_print(info_response.errors)
-                return
+            billing_account = await client.get_billing_account(billing_account_id)
 
             print("Billing Account Information:")
-            pretty_print(info_response.data)
+            pretty_print(billing_account)
 
 
 if __name__ == "__main__":

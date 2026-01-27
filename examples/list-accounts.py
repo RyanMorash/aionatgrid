@@ -20,9 +20,10 @@ async def main() -> None:
     cookie_jar = create_cookie_jar()
     async with aiohttp.ClientSession(cookie_jar=cookie_jar) as session:
         async with NationalGridClient(config=config, session=session) as client:
-            response = await client.linked_billing_accounts()
-            print("Linked Billing Accounts Response:")
-            print(response.data)
+            accounts = await client.get_linked_accounts()
+            print(f"Found {len(accounts)} linked billing account(s):")
+            for account in accounts:
+                print(f"  - {account['billingAccountId']}")
 
 
 if __name__ == "__main__":

@@ -33,44 +33,19 @@ async def main() -> None:
         async with NationalGridClient(config=config, session=session) as client:
             # First, get linked billing accounts to obtain an account number
             print("Fetching linked billing accounts...")
-            accounts_response = await client.linked_billing_accounts()
+            accounts = await client.get_linked_accounts()
 
-            if accounts_response.errors:
-                print("Error fetching linked accounts:")
-                pretty_print(accounts_response.errors)
-                return
-
-            data = accounts_response.data or {}
-            account_links = (
-                data.get("user", {}).get("accountLinks", {}).get("nodes", [])
-            )
-
-            if not account_links:
+            if not accounts:
                 print("No linked billing accounts found.")
                 return
 
-            primary_account = account_links[0]
-            account_number = primary_account.get("billingAccountId")
-
-            if not account_number:
-                print("Primary account is missing billingAccountId.")
-                return
-
+            account_number = accounts[0]["billingAccountId"]
             print(f"Using account: {account_number}")
             print()
 
             # Fetch billing account info to get the region (used as companyCode)
             print("Fetching billing account info...")
-            info_response = await client.billing_account_info(
-                variables={"accountNumber": account_number}
-            )
-
-            if info_response.errors:
-                print("Error fetching billing account info:")
-                pretty_print(info_response.errors)
-                return
-
-            billing_account = (info_response.data or {}).get("billingAccount", {})
+            billing_account = await client.get_billing_account(account_number)
             region = billing_account.get("region")
             print(f"Account region: {region}")
             print()
@@ -78,40 +53,20 @@ async def main() -> None:
             # Fetch energy usage costs for the current month
             print("Fetching energy usage costs...")
             today = date.today()
-            costs_response = await client.energy_usage_costs(
-                variables={
-                    "accountNumber": account_number,
-                    "date": today.isoformat(),
-                    "companyCode": region,
-                }
-            )
+            costs = await client.get_energy_usage_costs(account_number, today, region)
 
-            if costs_response.errors:
-                print("Error fetching energy usage costs:")
-                pretty_print(costs_response.errors)
-            else:
-                print("Energy Usage Costs:")
-                pretty_print(costs_response.data)
+            print("Energy Usage Costs:")
+            pretty_print(costs)
             print()
 
             # Fetch historical energy usages (last 12 months)
             print("Fetching historical energy usages...")
             # usageYearMonth is an integer in YYYYMM format
             from_month = (today.year - 1) * 100 + today.month
-            usages_response = await client.energy_usages(
-                variables={
-                    "accountNumber": account_number,
-                    "from": from_month,
-                    "first": 12,
-                }
-            )
+            usages = await client.get_energy_usages(account_number, from_month, first=12)
 
-            if usages_response.errors:
-                print("Error fetching energy usages:")
-                pretty_print(usages_response.errors)
-            else:
-                print("Historical Energy Usages:")
-                pretty_print(usages_response.data)
+            print("Historical Energy Usages:")
+            pretty_print(usages)
 
 
 if __name__ == "__main__":
