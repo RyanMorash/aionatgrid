@@ -15,6 +15,7 @@ from .extractors import (
     extract_billing_account,
     extract_energy_usage_costs,
     extract_energy_usages,
+    extract_interval_reads,
     extract_linked_accounts,
 )
 from .graphql import GraphQLRequest, GraphQLResponse
@@ -95,4 +96,5 @@ __all__ = [
     "extract_billing_account",
     "extract_energy_usage_costs",
     "extract_energy_usages",
+    "extract_interval_reads",
 ]

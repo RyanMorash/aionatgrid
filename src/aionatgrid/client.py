@@ -7,7 +7,7 @@ import logging
 import random
 import time
 from collections.abc import Mapping, Sequence
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import urljoin
 
@@ -20,10 +20,11 @@ from .extractors import (
     extract_billing_account,
     extract_energy_usage_costs,
     extract_energy_usages,
+    extract_interval_reads,
     extract_linked_accounts,
 )
 from .graphql import GraphQLRequest, GraphQLResponse
-from .models import AccountLink, BillingAccount, EnergyUsage, EnergyUsageCost
+from .models import AccountLink, BillingAccount, EnergyUsage, EnergyUsageCost, IntervalRead
 from .oidchelper import LoginData
 from .queries import (
     BILLING_ACCOUNT_INFO_SELECTION_SET,
@@ -769,3 +770,45 @@ class NationalGridClient:
             timeout=timeout,
         )
         return extract_energy_usages(response)
+
+    async def get_interval_reads(
+        self,
+        premise_number: str | int,
+        service_point_number: str | int,
+        start_datetime: datetime | str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> list[IntervalRead]:
+        """Get real-time meter interval reads with typed response.
+
+        Args:
+            premise_number: The premise number (auto-converts int to str)
+            service_point_number: The service point number (auto-converts int to str)
+            start_datetime: Start datetime (datetime object or "YYYY-MM-DD HH:MM:SS" string)
+            headers: Additional headers to include
+            timeout: Request timeout in seconds
+
+        Returns:
+            List of interval reads
+
+        Raises:
+            RestAPIError: When the REST request fails
+            DataExtractionError: When the response is not in expected format
+        """
+        premise_str = str(premise_number)
+        service_point_str = str(service_point_number)
+
+        if isinstance(start_datetime, datetime):
+            datetime_str = start_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            datetime_str = start_datetime
+
+        response = await self.realtime_meter_info(
+            premise_number=premise_str,
+            service_point_number=service_point_str,
+            start_datetime=datetime_str,
+            headers=headers,
+            timeout=timeout,
+        )
+        return extract_interval_reads(response)

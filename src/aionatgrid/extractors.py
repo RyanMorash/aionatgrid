@@ -11,7 +11,9 @@ from .models import (
     BillingAccount,
     EnergyUsage,
     EnergyUsageCost,
+    IntervalRead,
 )
+from .rest import RestResponse
 
 
 def extract_linked_accounts(response: GraphQLResponse) -> list[AccountLink]:
@@ -176,3 +178,32 @@ def extract_energy_usages(response: GraphQLResponse) -> list[EnergyUsage]:
         )
 
     return cast(list[EnergyUsage], nodes)
+
+
+def extract_interval_reads(response: RestResponse) -> list[IntervalRead]:
+    """Extract interval reads from a REST response.
+
+    Args:
+        response: The REST response from realtime_meter_info()
+
+    Returns:
+        List of interval reads
+
+    Raises:
+        DataExtractionError: If the response data is not in expected format
+    """
+    if response.data is None:
+        raise DataExtractionError(
+            "Response data is null",
+            path="data",
+            response_data=None,
+        )
+
+    if not isinstance(response.data, list):
+        raise DataExtractionError(
+            "Expected list of interval reads",
+            path="data",
+            response_data=response.data,
+        )
+
+    return cast(list[IntervalRead], response.data)

@@ -104,11 +104,18 @@ class EnergyUsagesConnection(TypedDict):
     nodes: list[EnergyUsage]
 
 
-# REST: Interval Reads (total=False for flexible schema)
-class IntervalRead(TypedDict, total=False):
-    """Real-time meter interval read data."""
+# REST: Interval Reads
+class IntervalRead(TypedDict):
+    """Real-time meter interval read data (15-minute intervals).
 
-    timestamp: str
+    Attributes:
+        startTime: Start of interval in ISO 8601 format with timezone
+                   (e.g., "2026-01-22T13:00:00-05:00")
+        endTime: End of interval in ISO 8601 format with timezone
+                 (e.g., "2026-01-22T13:15:00-05:00")
+        value: Energy usage in kWh for this interval
+    """
+
+    startTime: str
+    endTime: str
     value: float
-    unit: str
-    quality: str
