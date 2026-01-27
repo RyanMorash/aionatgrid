@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import logging
 from datetime import date, timedelta
 
 import aiohttp
@@ -13,14 +12,15 @@ import aiohttp
 from aionatgrid import NationalGridClient, NationalGridConfig
 from aionatgrid.helpers import create_cookie_jar
 
-logging.basicConfig(level=logging.DEBUG)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch AMI hourly energy usage")
     parser.add_argument("--username", required=True, help="National Grid username")
     parser.add_argument("--password", required=True, help="National Grid password")
     parser.add_argument(
-        "--days", type=int, default=7,
+        "--days",
+        type=int,
+        default=7,
         help="Number of days to look back (default: 7)",
     )
     return parser.parse_args()
