@@ -623,7 +623,7 @@ class NationalGridClient:
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
     ) -> GraphQLResponse:
-        """Execute the AMI energy usages (daily) query."""
+        """Execute the AMI energy usages (hourly) query."""
         kwargs: dict[str, Any] = {
             "selection_set": selection_set,
             "variables": variables,

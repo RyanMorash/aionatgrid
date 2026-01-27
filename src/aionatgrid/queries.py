@@ -241,7 +241,7 @@ def ami_energy_usages_request(
     ),
     operation_name: str = "NrtDailyUsage",
 ) -> GraphQLRequest:
-    """Scaffold an AMI energy usages (daily) query.
+    """Scaffold an AMI energy usages (hourly) query.
 
     This request targets the energyusage-cu-uwp-gql GraphQL endpoint.
     """
