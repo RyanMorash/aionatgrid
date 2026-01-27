@@ -1,17 +1,23 @@
-.. aionatgrid documentation master file, created by
-   sphinx-quickstart on Tue Jan 27 18:37:56 2026.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+aionatgrid
+==========
 
-aionatgrid documentation
-========================
+Async Python client for the National Grid API, built on `aiohttp <https://docs.aiohttp.org/>`_.
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+**Features:**
 
+- Async/await interface using ``aiohttp``
+- Automatic OIDC authentication via Azure AD B2C
+- Token caching with automatic refresh before expiration
+- GraphQL and REST endpoint support
+- Typed response models with extraction helpers
+- Configurable retry with exponential backoff
+- Connection pooling and session reuse
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+   getting-started
+   usage
+   api
+   exceptions
