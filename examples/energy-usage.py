@@ -46,7 +46,7 @@ async def main() -> None:
             # Fetch billing account info to get the region (used as companyCode)
             print("Fetching billing account info...")
             billing_account = await client.get_billing_account(account_number)
-            region = billing_account.get("region")
+            region = billing_account["region"]
             print(f"Account region: {region}")
             print()
 

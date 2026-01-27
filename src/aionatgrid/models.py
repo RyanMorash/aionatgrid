@@ -47,8 +47,8 @@ class Meter(TypedDict):
     deviceCode: str
     fuelType: str
     meterPointTypeCode: str
-    meterPointNumber: str
-    servicePointNumber: str
+    meterPointNumber: int
+    servicePointNumber: int
     meterNumber: str
 
 
@@ -68,8 +68,8 @@ class BillingAccount(TypedDict):
     status: str
     serviceAddress: ServiceAddress
     customerInfo: CustomerInfo
-    customerNumber: str
-    premiseNumber: str
+    customerNumber: int
+    premiseNumber: int
     meter: MeterConnection
 
 
