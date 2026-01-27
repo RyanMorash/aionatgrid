@@ -260,9 +260,7 @@ async def test_get_energy_usages_passes_variables(
     mock_session: MagicMock, config: NationalGridConfig
 ) -> None:
     """Verify get_energy_usages passes the correct variables."""
-    mock_session.post.return_value = _DummyResponse(
-        {"data": {"energyUsages": {"nodes": []}}}
-    )
+    mock_session.post.return_value = _DummyResponse({"data": {"energyUsages": {"nodes": []}}})
 
     client = NationalGridClient(config=config, session=mock_session)
     await client.get_energy_usages("acct-001", 202301, first=24)
@@ -282,9 +280,7 @@ async def test_typed_method_raises_on_graphql_errors(
     mock_session.post.return_value = _DummyResponse(
         {
             "data": None,
-            "errors": [
-                {"message": "Unauthorized", "extensions": {"code": "UNAUTHENTICATED"}}
-            ],
+            "errors": [{"message": "Unauthorized", "extensions": {"code": "UNAUTHENTICATED"}}],
         }
     )
 

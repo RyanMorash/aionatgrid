@@ -204,6 +204,7 @@ async def test_execute_uses_oidc_token(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_session_uses_configured_connector(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify session is created with configured TCPConnector."""
+
     async def _fake_login(
         self,
         session: aiohttp.ClientSession,

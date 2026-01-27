@@ -87,9 +87,7 @@ async def async_auth_oidc(
             None, ssl.create_default_context
         )
         connector = aiohttp.TCPConnector(ssl=ssl_context)
-        active_session = aiohttp.ClientSession(
-            connector=connector, cookie_jar=create_cookie_jar()
-        )
+        active_session = aiohttp.ClientSession(connector=connector, cookie_jar=create_cookie_jar())
     else:
         # session is guaranteed non-None here since owns_session = (session is None)
         assert session is not None
@@ -99,9 +97,7 @@ async def async_auth_oidc(
         code_verifier = _generate_code_verifier()
         code_challenge = _generate_code_challenge(code_verifier)
         _LOGGER.debug("Generated PKCE code verifier and challenge")
-        config = await _get_config(
-            active_session, base_url, tenant_id, policy, timeout=timeout
-        )
+        config = await _get_config(active_session, base_url, tenant_id, policy, timeout=timeout)
         _LOGGER.debug("Retrieved OAuth configuration")
         auth_code, sub_value = await _get_auth(
             active_session,
@@ -374,7 +370,7 @@ def _check_b2c_error_response(content: str) -> tuple[str, str] | None:
         Tuple of (error_type, error_detail) if an error is detected, None otherwise.
     """
     # Check for GLOBALEX error object (indicates B2C exception)
-    globalex_match = re.search(r'var GLOBALEX\s*=\s*\{([^}]+)\}', content)
+    globalex_match = re.search(r"var GLOBALEX\s*=\s*\{([^}]+)\}", content)
     if globalex_match:
         try:
             # Parse the GLOBALEX object
@@ -449,9 +445,7 @@ async def _post_credentials(
         error_info = _check_b2c_error_response(response_content)
         if error_info:
             error_type, error_detail = error_info
-            _LOGGER.error(
-                "B2C authentication error: %s - %s", error_type, error_detail
-            )
+            _LOGGER.error("B2C authentication error: %s - %s", error_type, error_detail)
             if "password" in error_detail.lower() or "credential" in error_detail.lower():
                 raise InvalidAuthError(f"Invalid username or password: {error_detail}")
             raise CannotConnectError(f"Authentication failed: {error_detail}")
