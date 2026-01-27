@@ -31,7 +31,7 @@ dependencies = [
 dynamic = []
 
 [project.urls]
-repository = "https:/github.com/ryanmorash/aionatgrid"
+repository = "https://github.com/ryanmorash/aionatgrid"
 
 [project.optional-dependencies]
 dev = [
