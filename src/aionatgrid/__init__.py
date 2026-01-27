@@ -37,10 +37,12 @@ from .models import (
 )
 from .oidchelper import LoginData
 from .queries import (
+    AMI_ENERGY_USAGES_SELECTION_SET,
     DEFAULT_SELECTION_SET,
     ENERGY_USAGE_COSTS_SELECTION_SET,
     ENERGY_USAGES_SELECTION_SET,
     StandardQuery,
+    ami_energy_usages_request,
     billing_account_info_request,
     energy_usage_costs_request,
     energy_usages_request,
@@ -58,11 +60,13 @@ __all__ = [
     "LoginData",
     "create_cookie_jar",
     "DEFAULT_SELECTION_SET",
+    "AMI_ENERGY_USAGES_SELECTION_SET",
     "ENERGY_USAGE_COSTS_SELECTION_SET",
     "ENERGY_USAGES_SELECTION_SET",
     "RestRequest",
     "RestResponse",
     "StandardQuery",
+    "ami_energy_usages_request",
     "billing_account_info_request",
     "energy_usage_costs_request",
     "energy_usages_request",

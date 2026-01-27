@@ -66,6 +66,13 @@ nodes {
     usageYearMonth
 }
 """
+AMI_ENERGY_USAGES_SELECTION_SET = """
+nodes {
+    date
+    fuelType
+    quantity
+}
+"""
 
 
 @dataclass(slots=True)
@@ -204,6 +211,43 @@ def energy_usages_request(
     return StandardQuery(
         operation_name=operation_name,
         root_field="energyUsages",
+        selection_set=selection_set,
+        variables=variables,
+        variable_definitions=variable_definitions,
+        field_arguments=field_arguments,
+        endpoint=ENERGY_USAGE_ENDPOINT,
+    ).to_request()
+
+
+def ami_energy_usages_request(
+    *,
+    selection_set: str = AMI_ENERGY_USAGES_SELECTION_SET,
+    variables: Mapping[str, Any] | None = None,
+    variable_definitions: str | Sequence[str] | None = (
+        "$meterNumber: String!",
+        "$premiseNumber: String!",
+        "$servicePointNumber: String!",
+        "$meterPointNumber: String!",
+        "$dateFrom: Date!",
+        "$dateTo: Date!",
+    ),
+    field_arguments: str | None = (
+        "meterNumber: $meterNumber, "
+        "premiseNumber: $premiseNumber, "
+        "servicePointNumber: $servicePointNumber, "
+        "meterPointNumber: $meterPointNumber, "
+        "dateFrom: $dateFrom, "
+        "dateTo: $dateTo"
+    ),
+    operation_name: str = "NrtDailyUsage",
+) -> GraphQLRequest:
+    """Scaffold an AMI energy usages (daily) query.
+
+    This request targets the energyusage-cu-uwp-gql GraphQL endpoint.
+    """
+    return StandardQuery(
+        operation_name=operation_name,
+        root_field="amiEnergyUsages",
         selection_set=selection_set,
         variables=variables,
         variable_definitions=variable_definitions,

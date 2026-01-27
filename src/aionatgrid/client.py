@@ -27,10 +27,12 @@ from .graphql import GraphQLRequest, GraphQLResponse
 from .models import AccountLink, BillingAccount, EnergyUsage, EnergyUsageCost, IntervalRead
 from .oidchelper import LoginData
 from .queries import (
+    AMI_ENERGY_USAGES_SELECTION_SET,
     BILLING_ACCOUNT_INFO_SELECTION_SET,
     ENERGY_USAGE_COSTS_SELECTION_SET,
     ENERGY_USAGES_SELECTION_SET,
     LINKED_BILLING_SELECTION_SET,
+    ami_energy_usages_request,
     billing_account_info_request,
     energy_usage_costs_request,
     energy_usages_request,
@@ -609,6 +611,28 @@ class NationalGridClient:
         if field_arguments is not None:
             kwargs["field_arguments"] = field_arguments
         request = energy_usages_request(**kwargs)
+        return await self.execute(request, headers=headers, timeout=timeout)
+
+    async def ami_energy_usages(
+        self,
+        *,
+        selection_set: str = AMI_ENERGY_USAGES_SELECTION_SET,
+        variables: Mapping[str, Any] | None = None,
+        variable_definitions: str | Sequence[str] | None = None,
+        field_arguments: str | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> GraphQLResponse:
+        """Execute the AMI energy usages (daily) query."""
+        kwargs: dict[str, Any] = {
+            "selection_set": selection_set,
+            "variables": variables,
+        }
+        if variable_definitions is not None:
+            kwargs["variable_definitions"] = variable_definitions
+        if field_arguments is not None:
+            kwargs["field_arguments"] = field_arguments
+        request = ami_energy_usages_request(**kwargs)
         return await self.execute(request, headers=headers, timeout=timeout)
 
     async def realtime_meter_info(
