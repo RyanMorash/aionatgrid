@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath("../../src"))
 project = "aionatgrid"
 copyright = "2026, Ryan Morash"
 author = "Ryan Morash"
-release = "0.1.0"
+release = "0.3.0"
 
 # -- General configuration ---------------------------------------------------
 
