@@ -9,7 +9,7 @@ Async Python client for the National Grid API, built on `aiohttp <https://docs.a
 - Automatic OIDC authentication via Azure AD B2C
 - Token caching with automatic refresh before expiration
 - GraphQL and REST endpoint support
-- Typed response models with extraction helpers
+- Typed response models via TypedDict
 - Configurable retry with exponential backoff
 - Connection pooling and session reuse
 

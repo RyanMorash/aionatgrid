@@ -67,6 +67,38 @@ Retrieve monthly energy usage history:
    for usage in usages:
        print(usage)
 
+AMI Energy Usages (Smart Meters)
+--------------------------------
+
+For accounts with AMI smart meters, fetch daily energy usage data:
+
+.. code-block:: python
+
+   from datetime import date, timedelta
+
+   # AMI data has a 3-day delay
+   date_to = date.today() - timedelta(days=3)
+   date_from = date_to - timedelta(days=7)
+
+   usages = await client.get_ami_energy_usages(
+       meter_number="ABC123",
+       premise_number="12345",
+       service_point_number="67890",
+       meter_point_number="11111",
+       date_from=date_from,
+       date_to=date_to,
+   )
+   for usage in usages:
+       print(usage)
+
+Each item is an :class:`~aionatgrid.models.AmiEnergyUsage` TypedDict.
+
+.. note::
+
+   AMI energy usage requires an AMI smart meter. Check
+   ``meter["hasAmiSmartMeter"]`` from the billing account info response.
+   Data is typically delayed by 3 days.
+
 Interval Reads (Smart Meters)
 -----------------------------
 
