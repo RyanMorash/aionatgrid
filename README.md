@@ -19,25 +19,26 @@ async def main() -> None:
     )
 
     async with NationalGridClient(config=config) as client:
-        response = await client.linked_billing_accounts()
-        print(response.data)
+        accounts = await client.get_linked_accounts()
+        for account in accounts:
+            print(account["billingAccountId"])
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## Query Methods
+## API Methods
 
-| Method | Description |
-|--------|-------------|
-| `linked_billing_accounts()` | Get linked billing account IDs |
-| `billing_account_info()` | Get account details (region, meters, address) |
-| `energy_usage_costs()` | Get energy costs for a billing period |
-| `energy_usages()` | Get historical usage data |
-| `ami_energy_usages()` | Get AMI hourly energy usage |
-| `realtime_meter_info()` | Get real-time meter readings (REST) |
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `get_linked_accounts()` | `list[AccountLink]` | Get linked billing account IDs |
+| `get_billing_account()` | `BillingAccount` | Get account details (region, meters, address) |
+| `get_energy_usage_costs()` | `list[EnergyUsageCost]` | Get energy costs for a billing period |
+| `get_energy_usages()` | `list[EnergyUsage]` | Get historical usage data |
+| `get_ami_energy_usages()` | `list[AmiEnergyUsage]` | Get AMI hourly energy usage |
+| `get_interval_reads()` | `list[IntervalRead]` | Get real-time meter interval reads |
 
-For custom queries, use `execute()` with a `GraphQLRequest` directly.
+All methods return typed results using TypedDict models.
 
 ## Examples
 
