@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aionatgrid"
-version = "0.3.0"
+version = "0.3.1"
 description = "Async Python client for National Grid built on aiohttp"
 readme = "README.md"
 requires-python = ">=3.10"
