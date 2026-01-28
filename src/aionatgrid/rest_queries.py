@@ -1,4 +1,4 @@
-"""Scaffolded REST request builders for National Grid."""
+"""REST request builders for National Grid."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ AMI_INTERVAL_READS_PATH = (
 
 @dataclass(slots=True)
 class RealtimeMeterInfo:
-    """Scaffold parameters for the interval reads REST endpoint."""
+    """Parameters for the interval reads REST endpoint."""
 
     premise_number: str
     service_point_number: str
@@ -50,7 +50,7 @@ def realtime_meter_info_request(
     params: Mapping[str, str] | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> RestRequest:
-    """Scaffold the interval reads REST request."""
+    """Build the interval reads REST request."""
 
     return RealtimeMeterInfo(
         premise_number=premise_number,

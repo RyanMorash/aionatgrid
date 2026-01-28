@@ -18,7 +18,7 @@ class RestResponse:
 
 @dataclass(slots=True)
 class RestRequest:
-    """Simple REST request scaffold."""
+    """Simple REST request definition."""
 
     method: str
     path_or_url: str

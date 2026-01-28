@@ -1,4 +1,4 @@
-"""Scaffolded GraphQL query builders for National Grid."""
+"""GraphQL query builders for National Grid."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ nodes {
 
 @dataclass(slots=True)
 class StandardQuery:
-    """Generic query definition for scaffolding GraphQL operations."""
+    """Generic query definition for building GraphQL operations."""
 
     operation_name: str
     root_field: str
@@ -88,7 +88,7 @@ class StandardQuery:
     endpoint: str | None = None
 
     def to_request(self) -> GraphQLRequest:
-        """Convert this scaffold into a `GraphQLRequest`."""
+        """Convert this query definition into a `GraphQLRequest`."""
 
         selection_set = dedent(self.selection_set).strip() or DEFAULT_SELECTION_SET
         selection_block = indent(selection_set, "  ")
@@ -118,7 +118,7 @@ def linked_billing_accounts_request(
     field_arguments: str | None = "userId: $userId",
     operation_name: str = "AccountIdentifiers",
 ) -> GraphQLRequest:
-    """Scaffold a linked billing accounts query.
+    """Build a linked billing accounts query.
 
     This request targets the user-cu-uwp-gql GraphQL endpoint.
     """
@@ -142,7 +142,7 @@ def billing_account_info_request(
     field_arguments: str | None = "accountNumber: $accountNumber",
     operation_name: str = "OpowerAccount",
 ) -> GraphQLRequest:
-    """Scaffold a billing account information query.
+    """Build a billing account information query.
 
     This request targets the billingaccount-cu-uwp-gql GraphQL endpoint.
     """
@@ -172,7 +172,7 @@ def energy_usage_costs_request(
     ),
     operation_name: str = "EnergyUsageCosts",
 ) -> GraphQLRequest:
-    """Scaffold an energy usage costs query.
+    """Build an energy usage costs query.
 
     This request targets the energyusage-cu-uwp-gql GraphQL endpoint.
     """
@@ -204,7 +204,7 @@ def energy_usages_request(
     ),
     operation_name: str = "EnergyUsages",
 ) -> GraphQLRequest:
-    """Scaffold an energy usages query.
+    """Build an energy usages query.
 
     This request targets the energyusage-cu-uwp-gql GraphQL endpoint.
     """
@@ -241,7 +241,7 @@ def ami_energy_usages_request(
     ),
     operation_name: str = "NrtDailyUsage",
 ) -> GraphQLRequest:
-    """Scaffold an AMI energy usages (hourly) query.
+    """Build an AMI energy usages (hourly) query.
 
     This request targets the energyusage-cu-uwp-gql GraphQL endpoint.
     """

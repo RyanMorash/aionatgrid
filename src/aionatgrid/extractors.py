@@ -21,7 +21,7 @@ def extract_linked_accounts(response: GraphQLResponse) -> list[AccountLink]:
     """Extract linked accounts from a GraphQL response.
 
     Args:
-        response: The GraphQL response from linked_billing_accounts()
+        response: The GraphQL response from a linked billing accounts query
 
     Returns:
         List of account links
@@ -70,7 +70,7 @@ def extract_billing_account(response: GraphQLResponse) -> BillingAccount:
     """Extract billing account info from a GraphQL response.
 
     Args:
-        response: The GraphQL response from billing_account_info()
+        response: The GraphQL response from a billing account info query
 
     Returns:
         Billing account information
@@ -103,7 +103,7 @@ def extract_energy_usage_costs(response: GraphQLResponse) -> list[EnergyUsageCos
     """Extract energy usage costs from a GraphQL response.
 
     Args:
-        response: The GraphQL response from energy_usage_costs()
+        response: The GraphQL response from an energy usage costs query
 
     Returns:
         List of energy usage costs
@@ -144,7 +144,7 @@ def extract_energy_usages(response: GraphQLResponse) -> list[EnergyUsage]:
     """Extract energy usages from a GraphQL response.
 
     Args:
-        response: The GraphQL response from energy_usages()
+        response: The GraphQL response from an energy usages query
 
     Returns:
         List of energy usages
@@ -226,7 +226,7 @@ def extract_interval_reads(response: RestResponse) -> list[IntervalRead]:
     """Extract interval reads from a REST response.
 
     Args:
-        response: The REST response from realtime_meter_info()
+        response: The REST response from a real-time meter info request
 
     Returns:
         List of interval reads
