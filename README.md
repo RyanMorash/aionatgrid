@@ -1,5 +1,7 @@
 # aionatgrid
 
+[![PyPI](https://img.shields.io/pypi/v/aionatgrid)](https://pypi.org/project/aionatgrid/)
+
 Async Python client for National Grid's GraphQL and REST APIs.
 
 ## Installation
