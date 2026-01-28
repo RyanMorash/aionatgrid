@@ -6,7 +6,7 @@ import asyncio
 import logging
 import random
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Any
 from urllib.parse import urljoin
@@ -27,12 +27,6 @@ from .graphql import GraphQLRequest, GraphQLResponse
 from .models import AccountLink, BillingAccount, EnergyUsage, EnergyUsageCost, IntervalRead
 from .oidchelper import LoginData
 from .queries import (
-    AMI_ENERGY_USAGES_SELECTION_SET,
-    BILLING_ACCOUNT_INFO_SELECTION_SET,
-    ENERGY_USAGE_COSTS_SELECTION_SET,
-    ENERGY_USAGES_SELECTION_SET,
-    LINKED_BILLING_SELECTION_SET,
-    ami_energy_usages_request,
     billing_account_info_request,
     energy_usage_costs_request,
     energy_usages_request,
@@ -508,164 +502,8 @@ class NationalGridClient:
             )
             return self._session
 
-    async def ping(self) -> bool:
-        """Simple health-check that issues an empty request body."""
-
-        dummy_request = GraphQLRequest(query="query Ping { __typename }")
-        response = await self.execute(dummy_request)
-        return response.data is not None
-
-    async def linked_billing_accounts(
-        self,
-        *,
-        selection_set: str = LINKED_BILLING_SELECTION_SET,
-        variables: Mapping[str, Any] | None = None,
-        variable_definitions: str | Sequence[str] | None = None,
-        field_arguments: str | None = None,
-        headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> GraphQLResponse:
-        """Execute the linked billing accounts scaffold query."""
-        session = await self._ensure_session()
-        await self._get_access_token(session)
-        if variables is None:
-            sub_value = self._login_data.get("sub")
-            if sub_value:
-                variables = {"userId": sub_value}
-        # Only pass variable_definitions and field_arguments if explicitly set
-        # to avoid overriding the defaults in linked_billing_accounts_request
-        kwargs: dict[str, Any] = {
-            "selection_set": selection_set,
-            "variables": variables,
-        }
-        if variable_definitions is not None:
-            kwargs["variable_definitions"] = variable_definitions
-        if field_arguments is not None:
-            kwargs["field_arguments"] = field_arguments
-        request = linked_billing_accounts_request(**kwargs)
-        return await self.execute(request, headers=headers, timeout=timeout)
-
-    async def billing_account_info(
-        self,
-        *,
-        selection_set: str = BILLING_ACCOUNT_INFO_SELECTION_SET,
-        variables: Mapping[str, Any] | None = None,
-        variable_definitions: str | Sequence[str] | None = None,
-        field_arguments: str | None = None,
-        headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> GraphQLResponse:
-        """Execute the billing account information scaffold query."""
-        # Only pass variable_definitions and field_arguments if explicitly set
-        # to avoid overriding the defaults in billing_account_info_request
-        kwargs: dict[str, Any] = {
-            "selection_set": selection_set,
-            "variables": variables,
-        }
-        if variable_definitions is not None:
-            kwargs["variable_definitions"] = variable_definitions
-        if field_arguments is not None:
-            kwargs["field_arguments"] = field_arguments
-        request = billing_account_info_request(**kwargs)
-        return await self.execute(request, headers=headers, timeout=timeout)
-
-    async def energy_usage_costs(
-        self,
-        *,
-        selection_set: str = ENERGY_USAGE_COSTS_SELECTION_SET,
-        variables: Mapping[str, Any] | None = None,
-        variable_definitions: str | Sequence[str] | None = None,
-        field_arguments: str | None = None,
-        headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> GraphQLResponse:
-        """Execute the energy usage costs query."""
-        kwargs: dict[str, Any] = {
-            "selection_set": selection_set,
-            "variables": variables,
-        }
-        if variable_definitions is not None:
-            kwargs["variable_definitions"] = variable_definitions
-        if field_arguments is not None:
-            kwargs["field_arguments"] = field_arguments
-        request = energy_usage_costs_request(**kwargs)
-        return await self.execute(request, headers=headers, timeout=timeout)
-
-    async def energy_usages(
-        self,
-        *,
-        selection_set: str = ENERGY_USAGES_SELECTION_SET,
-        variables: Mapping[str, Any] | None = None,
-        variable_definitions: str | Sequence[str] | None = None,
-        field_arguments: str | None = None,
-        headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> GraphQLResponse:
-        """Execute the energy usages query."""
-        kwargs: dict[str, Any] = {
-            "selection_set": selection_set,
-            "variables": variables,
-        }
-        if variable_definitions is not None:
-            kwargs["variable_definitions"] = variable_definitions
-        if field_arguments is not None:
-            kwargs["field_arguments"] = field_arguments
-        request = energy_usages_request(**kwargs)
-        return await self.execute(request, headers=headers, timeout=timeout)
-
-    async def ami_energy_usages(
-        self,
-        *,
-        selection_set: str = AMI_ENERGY_USAGES_SELECTION_SET,
-        variables: Mapping[str, Any] | None = None,
-        variable_definitions: str | Sequence[str] | None = None,
-        field_arguments: str | None = None,
-        headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> GraphQLResponse:
-        """Execute the AMI energy usages (hourly) query."""
-        kwargs: dict[str, Any] = {
-            "selection_set": selection_set,
-            "variables": variables,
-        }
-        if variable_definitions is not None:
-            kwargs["variable_definitions"] = variable_definitions
-        if field_arguments is not None:
-            kwargs["field_arguments"] = field_arguments
-        request = ami_energy_usages_request(**kwargs)
-        return await self.execute(request, headers=headers, timeout=timeout)
-
-    async def realtime_meter_info(
-        self,
-        *,
-        premise_number: str,
-        service_point_number: str,
-        start_datetime: str,
-        params: Mapping[str, str] | None = None,
-        headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
-    ) -> RestResponse:
-        """Execute the real-time meter interval reads REST request."""
-
-        request = realtime_meter_info_request(
-            premise_number=premise_number,
-            service_point_number=service_point_number,
-            start_datetime=start_datetime,
-            params=params,
-            headers=headers,
-        )
-        return await self.request_rest(
-            request.method,
-            request.path_or_url,
-            params=request.params,
-            json=request.json,
-            data=request.data,
-            headers=request.headers,
-            timeout=timeout,
-        )
-
     # -------------------------------------------------------------------------
-    # Typed convenience methods
+    # Typed public methods
     # -------------------------------------------------------------------------
 
     async def get_linked_accounts(
@@ -688,7 +526,14 @@ class NationalGridClient:
             DataExtractionError: When the expected data path is missing
             ValueError: When the response contains GraphQL errors
         """
-        response = await self.linked_billing_accounts(headers=headers, timeout=timeout)
+        session = await self._ensure_session()
+        await self._get_access_token(session)
+        variables: Mapping[str, Any] | None = None
+        sub_value = self._login_data.get("sub")
+        if sub_value:
+            variables = {"userId": sub_value}
+        request = linked_billing_accounts_request(variables=variables)
+        response = await self.execute(request, headers=headers, timeout=timeout)
         return extract_linked_accounts(response)
 
     async def get_billing_account(
@@ -713,11 +558,10 @@ class NationalGridClient:
             DataExtractionError: When the expected data path is missing
             ValueError: When the response contains GraphQL errors
         """
-        response = await self.billing_account_info(
+        request = billing_account_info_request(
             variables={"accountNumber": account_number},
-            headers=headers,
-            timeout=timeout,
         )
+        response = await self.execute(request, headers=headers, timeout=timeout)
         return extract_billing_account(response)
 
     async def get_energy_usage_costs(
@@ -747,15 +591,14 @@ class NationalGridClient:
             ValueError: When the response contains GraphQL errors
         """
         date_str = query_date.isoformat() if isinstance(query_date, date) else query_date
-        response = await self.energy_usage_costs(
+        request = energy_usage_costs_request(
             variables={
                 "accountNumber": account_number,
                 "date": date_str,
                 "companyCode": company_code,
             },
-            headers=headers,
-            timeout=timeout,
         )
+        response = await self.execute(request, headers=headers, timeout=timeout)
         return extract_energy_usage_costs(response)
 
     async def get_energy_usages(
@@ -784,15 +627,14 @@ class NationalGridClient:
             DataExtractionError: When the expected data path is missing
             ValueError: When the response contains GraphQL errors
         """
-        response = await self.energy_usages(
+        request = energy_usages_request(
             variables={
                 "accountNumber": account_number,
                 "from": from_month,
                 "first": first,
             },
-            headers=headers,
-            timeout=timeout,
         )
+        response = await self.execute(request, headers=headers, timeout=timeout)
         return extract_energy_usages(response)
 
     async def get_interval_reads(
@@ -828,11 +670,19 @@ class NationalGridClient:
         else:
             datetime_str = start_datetime
 
-        response = await self.realtime_meter_info(
+        rest_request = realtime_meter_info_request(
             premise_number=premise_str,
             service_point_number=service_point_str,
             start_datetime=datetime_str,
             headers=headers,
+        )
+        response = await self.request_rest(
+            rest_request.method,
+            rest_request.path_or_url,
+            params=rest_request.params,
+            json=rest_request.json,
+            data=rest_request.data,
+            headers=rest_request.headers,
             timeout=timeout,
         )
         return extract_interval_reads(response)
