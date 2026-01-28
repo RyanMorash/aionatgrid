@@ -8,6 +8,7 @@ from .exceptions import DataExtractionError
 from .graphql import GraphQLResponse
 from .models import (
     AccountLink,
+    AmiEnergyUsage,
     BillingAccount,
     EnergyUsage,
     EnergyUsageCost,
@@ -178,6 +179,47 @@ def extract_energy_usages(response: GraphQLResponse) -> list[EnergyUsage]:
         )
 
     return cast(list[EnergyUsage], nodes)
+
+
+def extract_ami_energy_usages(response: GraphQLResponse) -> list[AmiEnergyUsage]:
+    """Extract AMI energy usages from a GraphQL response.
+
+    Args:
+        response: The GraphQL response from an AMI energy usages query
+
+    Returns:
+        List of AMI energy usages
+
+    Raises:
+        ValueError: If the response contains GraphQL errors
+        DataExtractionError: If the expected data path is missing
+    """
+    response.raise_on_errors()
+
+    if response.data is None:
+        raise DataExtractionError(
+            "Response data is null",
+            path="data",
+            response_data=None,
+        )
+
+    ami_energy_usages = response.data.get("amiEnergyUsages")
+    if ami_energy_usages is None:
+        raise DataExtractionError(
+            "Missing 'amiEnergyUsages' field in response",
+            path="data.amiEnergyUsages",
+            response_data=response.data,
+        )
+
+    nodes = ami_energy_usages.get("nodes")
+    if nodes is None:
+        raise DataExtractionError(
+            "Missing 'nodes' field in amiEnergyUsages",
+            path="data.amiEnergyUsages.nodes",
+            response_data=response.data,
+        )
+
+    return cast(list[AmiEnergyUsage], nodes)
 
 
 def extract_interval_reads(response: RestResponse) -> list[IntervalRead]:

@@ -15,6 +15,8 @@ from .helpers import create_cookie_jar
 from .models import (
     AccountLink,
     AccountLinksConnection,
+    AmiEnergyUsage,
+    AmiEnergyUsagesConnection,
     BillingAccount,
     CustomerInfo,
     EnergyUsage,
@@ -46,6 +48,8 @@ __all__ = [
     # TypedDict models
     "AccountLink",
     "AccountLinksConnection",
+    "AmiEnergyUsage",
+    "AmiEnergyUsagesConnection",
     "BillingAccount",
     "CustomerInfo",
     "EnergyUsage",

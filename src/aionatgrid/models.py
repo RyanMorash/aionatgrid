@@ -104,6 +104,21 @@ class EnergyUsagesConnection(TypedDict):
     nodes: list[EnergyUsage]
 
 
+# AMI Energy Usages (energyusage-cu-uwp-gql)
+class AmiEnergyUsage(TypedDict):
+    """AMI hourly energy usage data."""
+
+    date: str  # YYYY-MM-DD
+    fuelType: str
+    quantity: float
+
+
+class AmiEnergyUsagesConnection(TypedDict):
+    """Connection type for AMI energy usages."""
+
+    nodes: list[AmiEnergyUsage]
+
+
 # REST: Interval Reads
 class IntervalRead(TypedDict):
     """Real-time meter interval read data (15-minute intervals).

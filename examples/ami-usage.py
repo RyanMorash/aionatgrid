@@ -11,7 +11,6 @@ import aiohttp
 
 from aionatgrid import NationalGridClient, NationalGridConfig
 from aionatgrid.helpers import create_cookie_jar
-from aionatgrid.queries import ami_energy_usages_request
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,26 +85,21 @@ async def main() -> None:
             print(f"Fetching AMI hourly usage from {date_from} to {date_to}...")
             print()
 
-            request = ami_energy_usages_request(
-                variables={
-                    "meterNumber": meter_number,
-                    "premiseNumber": str(premise_number),
-                    "servicePointNumber": str(service_point_number),
-                    "meterPointNumber": str(meter_point_number),
-                    "dateFrom": date_from.isoformat(),
-                    "dateTo": date_to.isoformat(),
-                },
+            usages = await client.get_ami_energy_usages(
+                meter_number=meter_number,
+                premise_number=premise_number,
+                service_point_number=service_point_number,
+                meter_point_number=meter_point_number,
+                date_from=date_from,
+                date_to=date_to,
             )
-            response = await client.execute(request)
 
-            data = response.data
-            if not data:
+            if not usages:
                 print("No AMI energy usage data returned.")
                 return
 
-            nodes = data.get("amiEnergyUsages", {}).get("nodes", [])
-            print(f"Received {len(nodes)} daily usage records:")
-            pretty_print(nodes)
+            print(f"Received {len(usages)} daily usage records:")
+            pretty_print(usages)
 
 
 if __name__ == "__main__":
