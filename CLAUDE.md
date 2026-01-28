@@ -31,6 +31,7 @@ uv run python examples/list-accounts.py --username user@example.com --password s
 uv run python examples/account-info.py --username user@example.com --password secret
 uv run python examples/interval-reads.py --username user@example.com --password secret
 uv run python examples/energy-usage.py --username user@example.com --password secret
+uv run python examples/ami-usage.py --username user@example.com --password secret
 ```
 
 ### Makefile Shortcuts
@@ -59,16 +60,16 @@ National Grid uses **separate GraphQL endpoints** for different data domains:
 - `billingaccount-cu-uwp-gql`: Account metadata (queries.py:BILLING_ACCOUNT_INFO_ENDPOINT)
 - `energyusage-cu-uwp-gql`: Usage data (queries.py:ENERGY_USAGE_ENDPOINT)
 
-Each query helper method (e.g., `linked_billing_accounts()`, `billing_account_info()`) automatically routes to the correct endpoint via the `endpoint` field in `GraphQLRequest`.
+Each typed client method (e.g., `get_linked_accounts()`, `get_billing_account()`) automatically routes to the correct endpoint via the `endpoint` field in `GraphQLRequest`.
 
 ### Query Builder Pattern
-The `StandardQuery` dataclass (queries.py) provides a scaffolding system for GraphQL operations:
+The `StandardQuery` dataclass (queries.py) builds GraphQL operations:
 - Composes selection sets with proper indentation
 - Handles variable definitions (single string or sequence)
 - Supports field arguments for parameterized queries
 - Automatically generates properly formatted GraphQL query strings via `compose_query()`
 
-Helper functions like `linked_billing_accounts_request()` provide pre-configured query templates with sensible defaults for selection sets and variable definitions.
+Internal helper functions like `linked_billing_accounts_request()` provide pre-configured query templates with sensible defaults for selection sets and variable definitions. These are used by the typed client methods and are not part of the public API.
 
 ### Authentication Flow
 1. First API call triggers `_get_access_token()` with double-checked locking
@@ -88,9 +89,21 @@ Helper functions like `linked_billing_accounts_request()` provide pre-configured
 - Credentials (username/password) must be passed explicitly; no environment variable loading
 
 ### Request/Response Abstractions
-- `GraphQLRequest`/`GraphQLResponse` (graphql.py): Thin wrappers around GraphQL payloads
-- `RestRequest`/`RestResponse` (rest.py, rest_queries.py): Parallel abstractions for REST endpoints
+- `GraphQLRequest`/`GraphQLResponse` (graphql.py): Internal wrappers around GraphQL payloads
+- `RestRequest`/`RestResponse` (rest.py, rest_queries.py): Internal abstractions for REST endpoints
 - Both support endpoint overrides at the request level
+- These are used internally by the typed `get_*` methods and are not publicly exported
+
+### Typed Public API
+The public API consists of typed `get_*` methods on `NationalGridClient`:
+- `get_linked_accounts()` → `list[AccountLink]`
+- `get_billing_account()` → `BillingAccount`
+- `get_energy_usage_costs()` → `list[EnergyUsageCost]`
+- `get_energy_usages()` → `list[EnergyUsage]`
+- `get_ami_energy_usages()` → `list[AmiEnergyUsage]`
+- `get_interval_reads()` → `list[IntervalRead]`
+
+Each method builds a request internally, executes it via `execute()` or `request_rest()`, and extracts the typed result using extractors (extractors.py). All response models are TypedDicts defined in models.py.
 
 ## Testing Patterns
 
@@ -110,9 +123,9 @@ Tests use mocked `aiohttp.ClientSession` objects with custom response classes (`
 - Access tokens expire after ~1 hour and are automatically refreshed 5 minutes before expiration
 - JWT signature verification requires network access to fetch signing keys from JWKS endpoint
 
-## Recent Security Improvements
+## Security
 
-- **JWT Verification**: ID tokens are now cryptographically verified using PyJWT with RS256 signature validation
+- **JWT Verification**: ID tokens are cryptographically verified using PyJWT with RS256 signature validation
 - **Token Expiration**: Access tokens are tracked and automatically refreshed before expiration
 - **Session Reuse**: Authentication reuses the client's session instead of creating duplicate connections
 - **Robust Parsing**: Settings extraction uses dual-strategy parsing (string slicing + regex fallback)
