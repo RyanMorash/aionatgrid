@@ -11,6 +11,7 @@ import aiohttp
 
 from aionatgrid import NationalGridClient, NationalGridConfig
 from aionatgrid.helpers import create_cookie_jar
+from aionatgrid.queries import ami_energy_usages_request
 
 
 def parse_args() -> argparse.Namespace:
@@ -85,7 +86,7 @@ async def main() -> None:
             print(f"Fetching AMI hourly usage from {date_from} to {date_to}...")
             print()
 
-            response = await client.ami_energy_usages(
+            request = ami_energy_usages_request(
                 variables={
                     "meterNumber": meter_number,
                     "premiseNumber": str(premise_number),
@@ -95,6 +96,7 @@ async def main() -> None:
                     "dateTo": date_to.isoformat(),
                 },
             )
+            response = await client.execute(request)
 
             data = response.data
             if not data:
